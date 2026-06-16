@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>NexBot — Semantic FAQ Chatbot</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=DM+Sans:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder@1.3.3/dist/universal-sentence-encoder.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0D0E14;
+  --surface:#16181F;
+  --surface2:#1E2029;
+  --surface3:#252830;
+  --border:rgba(255,255,255,0.07);
+  --border2:rgba(255,255,255,0.12);
+  --accent:#7C6EF7;
+  --accent2:#A99BFF;
+  --accent-glow:rgba(124,110,247,0.25);
+  --green:#22C55E;
+  --green-dim:rgba(34,197,94,0.15);
+  --amber:#F59E0B;
+  --red:#EF4444;
+  --text:#F0F0F5;
+  --text2:#9899A8;
+  --text3:#5A5B6A;
+  --user-bubble:#7C6EF7;
+}
+html,body{height:100%;background:var(--bg);font-family:'Inter',sans-serif;color:var(--text)}
+
+/* ── LAYOUT ── */
+#app{display:flex;height:100vh;max-height:100vh}
+
+/* ── SIDEBAR ── */
+#sidebar{width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+#logo-area{padding:22px 18px 18px;border-bottom:1px solid var(--border)}
+.logo-wrap{display:flex;align-items:center;gap:10px}
+.logo-icon{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#7C6EF7,#B8AEFF);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-icon svg{width:20px;height:20px}
+.logo-text .name{font-size:15px;font-weight:600;color:var(--text);letter-spacing:-.3px}
+.logo-text .tag{font-size:10px;color:var(--accent2);font-weight:500;letter-spacing:.6px;text-transform:uppercase}
+
+/* model status */
+#model-status{padding:14px 18px;border-bottom:1px solid var(--border)}
+.status-row{display:flex;align-items:center;gap:8px}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0;transition:background .4s}
+.status-dot.ready{background:var(--green);box-shadow:0 0 8px rgba(34,197,94,.5)}
+.status-dot.error{background:var(--red)}
+.status-label{font-size:12px;color:var(--text2);font-weight:500}
+.model-badge{margin-top:8px;display:inline-flex;align-items:center;gap:5px;background:rgba(124,110,247,.12);border:1px solid rgba(124,110,247,.25);border-radius:6px;padding:4px 8px;font-size:10px;color:var(--accent2);font-weight:500}
+.model-badge svg{width:10px;height:10px;opacity:.7}
+#load-bar-wrap{margin-top:8px;height:3px;background:var(--surface3);border-radius:2px;overflow:hidden;display:none}
+#load-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width .3s}
+
+/* stats */
+#stats-panel{padding:14px 18px;border-bottom:1px solid var(--border)}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat-card{background:var(--surface2);border-radius:8px;padding:10px;border:1px solid var(--border)}
+.stat-val{font-size:18px;font-weight:600;color:var(--text);line-height:1}
+.stat-val.accent{color:var(--accent2)}
+.stat-lbl{font-size:10px;color:var(--text3);margin-top:3px;font-weight:500;letter-spacing:.3px;text-transform:uppercase}
+
+/* categories */
+#cat-area{flex:1;padding:14px 12px;overflow-y:auto}
+.section-head{font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.8px;text-transform:uppercase;padding:0 6px;margin-bottom:8px}
+.cat-btn{width:100%;display:flex;align-items:center;gap:8px;padding:8px 8px;border-radius:8px;cursor:pointer;margin-bottom:2px;background:none;border:none;text-align:left;transition:background .15s;color:var(--text2)}
+.cat-btn:hover{background:var(--surface2);color:var(--text)}
+.cat-btn.active{background:rgba(124,110,247,.15);color:var(--text)}
+.cat-pip{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.cat-name{font-size:12px;font-family:'Inter',sans-serif;flex:1}
+.cat-n{font-size:10px;background:var(--surface3);color:var(--text3);padding:2px 6px;border-radius:10px;font-weight:500}
+.cat-btn.active .cat-n{background:rgba(124,110,247,.25);color:var(--accent2)}
+
+#sb-footer{padding:12px 18px;border-top:1px solid var(--border)}
+.engine-tag{font-size:10px;color:var(--text3);display:flex;align-items:center;gap:5px}
+.pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}70%{box-shadow:0 0 0 6px transparent}100%{box-shadow:0 0 0 0 transparent}}
+
+/* ── MAIN ── */
+#main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+
+/* header */
+#chat-header{padding:14px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--surface);flex-shrink:0}
+.bot-av{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#7C6EF7,#B8AEFF);display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;overflow:hidden}
+.bot-av-icon{width:22px;height:22px;transition:opacity .2s}
+.bot-av-wave{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:2px;opacity:0;transition:opacity .2s}
+.bot-av-wave.show{opacity:1}
+.wv{width:3px;border-radius:2px;background:rgba(255,255,255,.9);animation:wv 1s ease-in-out infinite}
+.wv:nth-child(1){height:5px;animation-delay:0s}
+.wv:nth-child(2){height:12px;animation-delay:.1s}
+.wv:nth-child(3){height:7px;animation-delay:.2s}
+.wv:nth-child(4){height:14px;animation-delay:.15s}
+.wv:nth-child(5){height:5px;animation-delay:.05s}
+@keyframes wv{0%,100%{transform:scaleY(.4);opacity:.5}50%{transform:scaleY(1);opacity:1}}
+.hdr-info .bot-name{font-size:14px;font-weight:600;color:var(--text);font-family:'DM Sans',sans-serif}
+.hdr-info .bot-sub{font-size:12px;color:var(--green);font-weight:500}
+.hdr-info .bot-sub.loading{color:var(--amber)}
+#hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.embed-pill{font-size:10px;background:rgba(124,110,247,.12);border:1px solid rgba(124,110,247,.25);border-radius:20px;padding:4px 10px;color:var(--accent2);font-weight:500;letter-spacing:.2px}
+.clear-btn{width:32px;height:32px;border-radius:8px;background:none;border:1px solid var(--border2);cursor:pointer;color:var(--text3);display:flex;align-items:center;justify-content:center;transition:all .15s}
+.clear-btn:hover{background:var(--surface2);color:var(--text2);border-color:var(--border2)}
+.clear-btn svg{width:15px;height:15px}
+
+/* messages */
+#msgs{flex:1;overflow-y:auto;padding:22px;display:flex;flex-direction:column;gap:18px}
+#msgs::-webkit-scrollbar{width:4px}
+#msgs::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:4px}
+.row{display:flex;gap:10px;align-items:flex-end;opacity:0;transform:translateY(12px);animation:fadeUp .3s ease forwards}
+@keyframes fadeUp{to{opacity:1;transform:translateY(0)}}
+.row.user{flex-direction:row-reverse}
+.av-sm{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#7C6EF7,#B8AEFF);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.av-sm svg{width:17px;height:17px}
+.user-av{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#0EA5E9,#7DD3FC);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff;flex-shrink:0}
+.msg-wrap{max-width:70%;display:flex;flex-direction:column;gap:5px}
+.row.user .msg-wrap{align-items:flex-end}
+.bubble{padding:12px 16px;border-radius:16px;font-size:13.5px;line-height:1.65;font-family:'DM Sans',sans-serif;word-break:break-word}
+.bot .bubble{background:var(--surface2);color:var(--text);border-bottom-left-radius:4px;border:1px solid var(--border2)}
+.user .bubble{background:var(--user-bubble);color:#fff;border-bottom-right-radius:4px}
+.msg-time{font-size:10px;color:var(--text3)}
+
+/* semantic score bar */
+.sem-bar-wrap{display:flex;align-items:center;gap:8px;margin-top:2px}
+.sem-bar-bg{flex:1;height:3px;background:var(--surface3);border-radius:2px;overflow:hidden;max-width:100px}
+.sem-bar-fill{height:100%;border-radius:2px;transition:width .5s ease}
+.sem-label{font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px}
+.sem-label.high{background:var(--green-dim);color:var(--green)}
+.sem-label.mid{background:rgba(245,158,11,.12);color:var(--amber)}
+.sem-label.low{background:rgba(239,68,68,.1);color:var(--red)}
+.tech-tags{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+.tech-tag{font-size:10px;color:var(--text3);background:var(--surface3);border-radius:4px;padding:2px 6px;border:1px solid var(--border)}
+
+/* related */
+.related-head{font-size:11px;color:var(--text3);font-weight:500;margin-bottom:6px}
+.rel-card{background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;cursor:pointer;margin-bottom:6px;transition:all .2s;text-align:left;width:100%}
+.rel-card:hover{border-color:var(--accent);background:rgba(124,110,247,.08)}
+.rel-q{font-size:12px;font-weight:500;color:var(--accent2);margin-bottom:3px;font-family:'DM Sans',sans-serif}
+.rel-a{font-size:11.5px;color:var(--text2);line-height:1.5}
+
+/* typing */
+.typing-row .bubble{padding:12px 16px}
+.dots{display:flex;gap:4px;align-items:center}
+.dots span{width:6px;height:6px;border-radius:50%;background:var(--text3);animation:dot 1.2s infinite}
+.dots span:nth-child(2){animation-delay:.2s}
+.dots span:nth-child(3){animation-delay:.4s}
+@keyframes dot{0%,80%,100%{opacity:.2;transform:scale(.7)}40%{opacity:1;transform:scale(1)}}
+
+/* chips */
+#chips{padding:0 22px 12px;display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:6px 13px;border-radius:20px;border:1px solid rgba(124,110,247,.35);background:rgba(124,110,247,.08);color:var(--accent2);font-size:12px;font-weight:500;cursor:pointer;transition:all .18s;font-family:'DM Sans',sans-serif;white-space:nowrap}
+.chip:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* input */
+#input-area{padding:14px 22px 18px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0}
+#input-box{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1.5px solid var(--border2);border-radius:14px;padding:8px 8px 8px 18px;transition:border-color .2s}
+#input-box:focus-within{border-color:var(--accent)}
+#txt{flex:1;background:none;border:none;outline:none;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;caret-color:var(--accent)}
+#txt::placeholder{color:var(--text3)}
+#txt:disabled{opacity:.5;cursor:not-allowed}
+#send{width:38px;height:38px;border-radius:10px;border:none;background:var(--accent);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+#send:hover:not(:disabled){background:#6A5EE5;transform:scale(1.05)}
+#send:disabled{opacity:.4;cursor:not-allowed}
+#send svg{width:16px;height:16px}
+#hint{margin-top:8px;font-size:11px;color:var(--text3);text-align:center}
+
+/* welcome */
+.welcome-msg{font-size:14px;line-height:1.65;color:var(--text);font-family:'DM Sans',sans-serif}
+.welcome-msg strong{color:var(--accent2);font-weight:500}
+.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.qcard{background:var(--surface3);border:1px solid var(--border2);border-radius:12px;padding:12px;cursor:pointer;transition:all .2s;text-align:left}
+.qcard:hover{border-color:var(--accent);background:rgba(124,110,247,.08)}
+.qcard-icon{font-size:17px;margin-bottom:5px}
+.qcard-title{font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px}
+.qcard-desc{font-size:11px;color:var(--text3);line-height:1.4}
+
+/* loading overlay */
+#loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:100;transition:opacity .5s}
+#loading-screen.hide{opacity:0;pointer-events:none}
+.load-logo{width:60px;height:60px;border-radius:18px;background:linear-gradient(135deg,#7C6EF7,#B8AEFF);display:flex;align-items:center;justify-content:center;animation:breathe 2s ease-in-out infinite}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.load-logo svg{width:34px;height:34px}
+.load-title{font-size:18px;font-weight:600;color:var(--text);letter-spacing:-.3px}
+.load-sub{font-size:13px;color:var(--text2);text-align:center;max-width:280px;line-height:1.5}
+.load-prog-wrap{width:220px;height:4px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.load-prog{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;transition:width .4s ease}
+.load-step{font-size:11px;color:var(--text3);min-height:16px}
+.load-tech{display:flex;gap:8px;margin-top:4px}
+.load-tech span{font-size:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:3px 8px;color:var(--text3)}
+
+@media(max-width:600px){#sidebar{display:none}#app{flex-direction:column}}
+</style>
+</head>
+<body>
+
+<!-- Loading screen -->
+<div id="loading-screen">
+  <div class="load-logo">
+    <svg viewBox="0 0 34 34" fill="none">
+      <circle cx="17" cy="17" r="8" fill="none" stroke="white" stroke-width="2"/>
+      <circle cx="17" cy="17" r="3" fill="white"/>
+      <line x1="17" y1="6" x2="17" y2="3" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      <line x1="17" y1="31" x2="17" y2="28" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      <line x1="6" y1="17" x2="3" y2="17" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      <line x1="31" y1="17" x2="28" y2="17" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+  </div>
+  <div>
+    <div class="load-title">NexBot</div>
+  </div>
+  <div class="load-sub" id="load-sub">Loading Universal Sentence Encoder…</div>
+  <div class="load-prog-wrap"><div class="load-prog" id="load-prog"></div></div>
+  <div class="load-step" id="load-step">Fetching TensorFlow.js model</div>
+  <div class="load-tech">
+    <span>USE v1.3</span><span>TF.js 4.17</span><span>512-dim</span>
+  </div>
+</div>
+
+<!-- Main app -->
+<div id="app">
+  <div id="sidebar">
+    <div id="logo-area">
+      <div class="logo-wrap">
+        <div class="logo-icon">
+          <svg viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="5" fill="none" stroke="white" stroke-width="1.5"/>
+            <circle cx="10" cy="10" r="2" fill="white"/>
+            <line x1="10" y1="3" x2="10" y2="1" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="10" y1="19" x2="10" y2="17" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="3" y1="10" x2="1" y2="10" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="19" y1="10" x2="17" y2="10" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <div class="name">NexBot</div>
+          <div class="tag">Semantic AI</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="model-status">
+      <div class="status-row">
+        <div class="status-dot" id="sdot"></div>
+        <span class="status-label" id="slabel">Loading model…</span>
+      </div>
+      <div class="model-badge">
+        <svg viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1"/><circle cx="5" cy="5" r="1.5" fill="currentColor"/></svg>
+        Universal Sentence Encoder
+      </div>
+      <div id="load-bar-wrap"><div id="load-bar"></div></div>
+    </div>
+
+    <div id="stats-panel">
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-val accent" id="s-asked">0</div>
+          <div class="stat-lbl">Asked</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="s-faqs">20</div>
+          <div class="stat-lbl">FAQs</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val accent" id="s-conf">—</div>
+          <div class="stat-lbl">Avg sim</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="s-mem">0/3</div>
+          <div class="stat-lbl">Memory</div>
+        </div>
+      </div>
+      <div class="model-badge" id="groq-badge" style="margin-top:8px">
+        <svg viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1"/><circle cx="5" cy="5" r="1.5" fill="currentColor"/></svg>
+        <span id="groq-badge-text">Groq fallback: no key set</span>
+      </div>
+    </div>
+
+    <div id="cat-area">
+      <div class="section-head">Topics</div>
+      <div id="cat-list"></div>
+    </div>
+
+    <div id="sb-footer">
+      <div class="engine-tag">
+        <div class="pulse"></div>
+        Word embeddings active
+      </div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="chat-header">
+      <div class="bot-av" id="botav">
+        <svg class="bot-av-icon" viewBox="0 0 22 22" fill="none">
+          <circle cx="11" cy="8" r="3.5" fill="white" opacity=".9"/>
+          <path d="M4 19c0-3.866 3.134-7 7-7h2c3.866 0 7 3.134 7 7" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity=".9"/>
+        </svg>
+        <div class="bot-av-wave" id="thinking-wave">
+          <div class="wv"></div><div class="wv"></div><div class="wv"></div><div class="wv"></div><div class="wv"></div>
+        </div>
+      </div>
+      <div class="hdr-info">
+        <div class="bot-name">NexBot Assistant</div>
+        <div class="bot-sub loading" id="hdrsub">Loading embeddings…</div>
+      </div>
+      <div id="hdr-right">
+        <div class="embed-pill">USE · 512d</div>
+        <button class="clear-btn" onclick="clearChat()" title="Clear chat">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div id="msgs"></div>
+    <div id="chips"></div>
+
+    <div id="input-area">
+      <div id="input-box">
+        <input id="txt" type="text" placeholder="Ask anything… (model loading)" disabled autocomplete="off"/>
+        <button id="send" onclick="send()" disabled>
+          <svg viewBox="0 0 16 16" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2L2 6.5l5 2 2 5L14 2z"/>
+          </svg>
+        </button>
+      </div>
+      <div id="hint">Semantic matching via Universal Sentence Encoder · 512-dimensional embeddings · Free &amp; offline after load</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// CONFIG — Groq fallback via Cloudflare Worker proxy
+// The Worker holds the real Groq API key server-side, so
+// nothing secret ever ships to the browser. Safe to deploy
+// publicly with this file as-is, once WORKER_URL is set.
+//
+// Setup: deploy /worker with `wrangler deploy`, then paste
+// the resulting *.workers.dev URL below.
+// ══════════════════════════════════════════════════════════
+const WORKER_URL = "https://nexbot-groq-proxy.YOUR-SUBDOMAIN.workers.dev";
+const GROQ_FALLBACK_LIMIT = 10; // soft client-side cap (Worker also rate-limits per IP)
+let groqCallsUsed = 0;
+
+// ── FAQ DATA ──
+const FAQS = [
+  {cat:"Account", q:"How do I reset my password?", a:"Go to Settings → Security → Reset Password. Enter your registered email and we'll send a reset link. The link expires in 30 minutes. Check your spam folder if you don't see it."},
+  {cat:"Account", q:"Can I change my email address?", a:"Yes. Navigate to Settings → Profile → Edit Email. Enter your new email and verify it via the confirmation link we send. The change takes effect immediately after verification."},
+  {cat:"Account", q:"How do I delete my account?", a:"Go to Settings → Privacy → Delete Account. This permanently removes all your data within 30 days. This action cannot be undone — you'll lose all order history and saved preferences."},
+  {cat:"Account", q:"How do I enable two-factor authentication?", a:"Go to Settings → Security → Two-Factor Auth. We support authenticator apps (Google Authenticator, Authy) and SMS. Authenticator apps are strongly recommended for better security."},
+  {cat:"Payments", q:"What payment methods do you accept?", a:"We accept Visa, Mastercard, American Express, RuPay, UPI (GPay, PhonePe, Paytm), and Net Banking from all major Indian banks. All transactions are secured with 256-bit SSL encryption."},
+  {cat:"Payments", q:"What happens if my payment fails?", a:"We automatically retry the payment 3 times over 3 days. If all retries fail, your order is paused. Update your payment method under Billing Settings to reactivate. You won't be charged for failed attempts."},
+  {cat:"Payments", q:"How do I get an invoice for my order?", a:"Invoices are automatically emailed after every successful payment. Download them from Orders → Select Order → Download Invoice. GST invoices are available for business accounts."},
+  {cat:"Orders", q:"How long does shipping take?", a:"Standard shipping takes 5–7 business days. Express shipping (2–3 days) is available at checkout for a fee. Same-day delivery is available in select metro cities."},
+  {cat:"Orders", q:"How do I track my order?", a:"Once shipped, you'll receive a tracking number via email and SMS. Visit My Orders and click Track for live GPS updates. You can also track via our mobile app."},
+  {cat:"Orders", q:"Can I cancel my order?", a:"Orders can be cancelled within 2 hours of placement for a full refund. After that, wait for delivery and initiate a return. Go to My Orders → Select Order → Cancel."},
+  {cat:"Returns", q:"How do I return a product?", a:"Initiate a return within 30 days of delivery from My Orders → Return Item. Select the reason, choose pickup or drop-off, and we'll schedule collection within 48 hours. Refund is processed after inspection."},
+  {cat:"Returns", q:"How long do refunds take?", a:"Refunds process within 5–7 business days after we receive and inspect the item. UPI and wallet refunds arrive faster (1–3 days). The original payment method is always used."},
+  {cat:"Subscription", q:"How do I cancel my subscription?", a:"Go to Account → Subscription → Cancel Plan. Access continues until the end of the billing cycle. No cancellation fees apply."},
+  {cat:"Subscription", q:"Do you offer a free trial?", a:"Yes! All new accounts get a 14-day free trial with full access to every feature including priority support. No credit card required. Trial auto-converts to the free plan."},
+  {cat:"Subscription", q:"How do I upgrade my plan?", a:"Navigate to Billing → Upgrade Plan. Upgrades take effect immediately and unused days are prorated as credit. Annual plans include a 20% discount."},
+  {cat:"Privacy", q:"Is my personal data safe?", a:"Your data is encrypted at rest (AES-256) and in transit (TLS 1.3). We never sell data to third parties and are fully GDPR and India PDPB compliant. Export or delete your data anytime from Settings."},
+  {cat:"Support", q:"How do I contact customer support?", a:"Live chat is available Monday–Saturday, 9am–9pm IST. Email support@nexbot.in or call toll-free 1800-123-4567. Average chat response time is under 2 minutes."},
+  {cat:"Support", q:"Do you have a mobile app?", a:"Yes! NexBot is available for iOS (App Store) and Android (Google Play). Supports order tracking, returns, live chat, and push notifications."},
+  {cat:"Support", q:"Can I use the service internationally?", a:"Our service works in 45+ countries. Pricing is in local currency where supported. Same-day delivery and COD are India-only. Check the availability map for details."},
+  {cat:"Support", q:"What are your business hours?", a:"The AI assistant is available 24/7. Human agents work Monday–Saturday 9am–9pm IST. Use the priority callback feature in the app for urgent issues outside these hours."}
+];
+
+const CAT_COLORS = {Account:'#7C6EF7',Payments:'#22C55E',Orders:'#F59E0B',Returns:'#EF4444',Subscription:'#A855F7',Privacy:'#0EA5E9',Support:'#EC4899'};
+const CATS = [...new Set(FAQS.map(f => f.cat))];
+
+// ── STATE ──
+let useModel = null;
+let faqEmbeddings = null;
+let asked = 0, totalSim = 0;
+let activeCat = null;
+
+// Conversation memory: last N exchanges, used to contextualize follow-ups
+const MEMORY_TURNS = 3;
+let conversationHistory = []; // [{role:'user'|'bot', text:'...'}]
+
+function buildContextualQuery(rawQuery) {
+  if (!conversationHistory.length) return rawQuery;
+  // Take last MEMORY_TURNS exchanges, weight recent context lightly
+  const recent = conversationHistory.slice(-MEMORY_TURNS * 2);
+  const contextText = recent.map(t => t.text).join('. ');
+  // Prepend lightweight context — the new query still dominates since it's repeated
+  return contextText + '. ' + rawQuery + '. ' + rawQuery;
+}
+
+// ── PROGRESS HELPERS ──
+function setProgress(pct, step) {
+  document.getElementById('load-prog').style.width = pct + '%';
+  document.getElementById('load-step').textContent = step;
+}
+
+// ── LOAD MODEL ──
+async function loadModel() {
+  try {
+    document.getElementById('load-bar-wrap').style.display = 'block';
+    setProgress(10, 'Initialising TensorFlow.js runtime…');
+
+    setProgress(25, 'Downloading Universal Sentence Encoder…');
+    document.getElementById('load-sub').textContent = 'Downloading model (~25MB, cached after first load)';
+
+    useModel = await use.load();
+    setProgress(65, 'Computing FAQ embeddings…');
+    document.getElementById('load-sub').textContent = 'Encoding 20 FAQs into 512-dimensional vectors…';
+
+    const sentences = FAQS.map(f => f.q + ' ' + f.a);
+    faqEmbeddings = await useModel.embed(sentences);
+
+    setProgress(90, 'Normalising embedding matrix…');
+    // L2-normalise for fast dot-product similarity
+    faqEmbeddings = tf.tidy(() => {
+      const norms = tf.norm(faqEmbeddings, 2, 1, true);
+      return tf.div(faqEmbeddings, norms);
+    });
+
+    setProgress(100, 'Ready!');
+    setTimeout(() => {
+      document.getElementById('loading-screen').classList.add('hide');
+      onReady();
+    }, 400);
+
+  } catch(e) {
+    document.getElementById('load-sub').textContent = 'Failed to load model. Check your internet connection.';
+    document.getElementById('load-step').textContent = e.message;
+    document.getElementById('sdot').classList.add('error');
+    document.getElementById('slabel').textContent = 'Load failed';
+  }
+}
+
+function onReady() {
+  document.getElementById('sdot').classList.add('ready');
+  document.getElementById('slabel').textContent = 'Model ready';
+  document.getElementById('hdrsub').textContent = '● Online · Semantic matching active';
+  document.getElementById('hdrsub').classList.remove('loading');
+  document.getElementById('txt').disabled = false;
+  document.getElementById('txt').placeholder = 'Ask me anything…';
+  document.getElementById('send').disabled = false;
+
+  const badge = document.getElementById('groq-badge-text');
+  if (WORKER_URL.includes("YOUR-SUBDOMAIN")) {
+    badge.textContent = 'Groq fallback: Worker not configured';
+  } else {
+    badge.textContent = `Groq fallback: ready (${GROQ_FALLBACK_LIMIT} calls/session)`;
+  }
+
+  buildSidebar();
+  showWelcome();
+  showChips(defaultChips);
+}
+
+// ── SEMANTIC SEARCH ──
+async function findBest(query) {
+  if (!useModel || !faqEmbeddings) return null;
+  return tf.tidy(() => {
+    // This runs synchronously after async embed
+    return null; // placeholder, real logic below
+  });
+}
+
+async function semanticSearch(query) {
+  const qEmbed = await useModel.embed([query]);
+  const qNorm = tf.tidy(() => {
+    const n = tf.norm(qEmbed, 2, 1, true);
+    return tf.div(qEmbed, n);
+  });
+  // dot product = cosine similarity (both L2-normalised)
+  const sims = tf.tidy(() => tf.squeeze(tf.matMul(qNorm, faqEmbeddings, false, true)));
+  const simsArr = await sims.array();
+  qEmbed.dispose(); qNorm.dispose(); sims.dispose();
+
+  const scored = FAQS.map((f, i) => ({ faq: f, sim: simsArr[i], idx: i }))
+    .sort((a, b) => b.sim - a.sim);
+  return scored;
+}
+
+// ── GROQ FALLBACK (via Cloudflare Worker proxy — no key in this file) ──
+async function groqFallback(query) {
+  if (WORKER_URL.includes("YOUR-SUBDOMAIN")) {
+    return { ok: false, reason: 'no-worker' };
+  }
+  if (groqCallsUsed >= GROQ_FALLBACK_LIMIT) {
+    return { ok: false, reason: 'limit' };
+  }
+  groqCallsUsed++;
+
+  const faqContext = FAQS.map(f => `Q: ${f.q}\nA: ${f.a}`).join('\n\n');
+  const recentHistory = conversationHistory.slice(-MEMORY_TURNS * 2)
+    .map(t => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.text}`).join('\n');
+
+  try {
+    const res = await fetch(WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, faqContext, recentHistory })
+    });
+
+    if (res.status === 429) return { ok: false, reason: 'limit' };
+    if (!res.ok) return { ok: false, reason: 'http-' + res.status };
+
+    const data = await res.json();
+    if (!data.text) return { ok: false, reason: 'empty' };
+    return { ok: true, text: data.text };
+  } catch (e) {
+    return { ok: false, reason: 'network' };
+  }
+}
+
+// ── SIDEBAR ──
+function buildSidebar() {
+  const list = document.getElementById('cat-list');
+  CATS.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'cat-btn';
+    btn.dataset.cat = c;
+    btn.innerHTML = `<div class="cat-pip" style="background:${CAT_COLORS[c]||'#555'}"></div><span class="cat-name">${c}</span><span class="cat-n">${FAQS.filter(f=>f.cat===c).length}</span>`;
+    btn.onclick = () => filterCat(c, btn);
+    list.appendChild(btn);
+  });
+}
+
+function filterCat(cat, el) {
+  if (activeCat === cat) {
+    activeCat = null;
+    document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+    showChips(defaultChips);
+  } else {
+    activeCat = cat;
+    document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    const qs = FAQS.filter(f => f.cat === cat).slice(0,4).map(f => f.q);
+    showChips(qs);
+    addBotMsg(`Here are questions in <strong style="color:${CAT_COLORS[cat]}">${cat}</strong>. Pick one or type your own.`, 0, true);
+  }
+}
+
+// ── CHIPS ──
+const defaultChips = ["I forgot my login","Package hasn't arrived","Want to cancel subscription","Is my data private?","How to get a refund?"];
+function showChips(list) {
+  const area = document.getElementById('chips');
+  area.innerHTML = '';
+  list.forEach(c => {
+    const ch = document.createElement('div');
+    ch.className = 'chip';
+    ch.textContent = c;
+    ch.onclick = () => { document.getElementById('txt').value = c; send(); };
+    area.appendChild(ch);
+  });
+}
+
+// ── MESSAGES ──
+const msgsEl = document.getElementById('msgs');
+
+function addUserMsg(text) {
+  const row = document.createElement('div');
+  row.className = 'row user';
+  const t = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  row.innerHTML = `<div class="user-av">U</div><div class="msg-wrap"><div class="bubble">${esc(text)}</div><div class="msg-time">${t}</div></div>`;
+  msgsEl.appendChild(row);
+  scroll();
+}
+
+function addBotMsg(html, sim, isRaw, source) {
+  const row = document.createElement('div');
+  row.className = 'row bot';
+  const simPct = Math.round(sim * 100);
+  const conf = sim >= 0.75 ? 'high' : sim >= 0.6 ? 'mid' : 'low';
+  const confLabel = sim >= 0.75 ? 'High similarity' : sim >= 0.6 ? 'Partial match' : sim > 0 ? 'Low match' : '';
+  const barW = Math.round(sim * 100);
+  const barColor = sim >= 0.6 ? '#22C55E' : sim >= 0.4 ? '#F59E0B' : '#EF4444';
+
+  let meta = '';
+  if (sim > 0) {
+    meta = `<div class="sem-bar-wrap">
+      <div class="sem-bar-bg"><div class="sem-bar-fill" style="width:${barW}%;background:${barColor}"></div></div>
+      <span class="sem-label ${conf}">${confLabel} · ${simPct}%</span>
+    </div>
+    <div class="tech-tags"><span class="tech-tag">USE</span><span class="tech-tag">512-dim</span><span class="tech-tag">dot·product</span><span class="tech-tag">L2-norm</span></div>`;
+  } else if (source === 'groq') {
+    meta = `<div class="tech-tags"><span class="tech-tag" style="color:#A99BFF;border-color:rgba(124,110,247,.35)">Llama 3.1 8B</span><span class="tech-tag">Groq fallback</span><span class="tech-tag">${GROQ_FALLBACK_LIMIT - groqCallsUsed} left</span></div>`;
+  }
+
+  row.innerHTML = `<div class="av-sm"><svg viewBox="0 0 22 22" fill="none"><circle cx="11" cy="8" r="3.5" fill="white" opacity=".9"/><path d="M4 19c0-3.866 3.134-7 7-7h2c3.866 0 7 3.134 7 7" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity=".9"/></svg></div><div class="msg-wrap"><div class="bubble">${isRaw ? html : esc(html)}</div>${meta}</div>`;
+  msgsEl.appendChild(row);
+  scroll();
+}
+
+function addRelated(results) {
+  if (!results || results.length < 2) return;
+  const secondaries = results.slice(1).filter(r => r.sim > 0.52);
+  if (!secondaries.length) return;
+
+  const row = document.createElement('div');
+  row.className = 'row bot';
+  row.style.animationDelay = '.12s';
+  let cards = secondaries.slice(0,2).map(r =>
+    `<button class="rel-card" onclick="document.getElementById('txt').value='${r.faq.q.replace(/'/g,"\\'")}';send()">
+      <div class="rel-q">${esc(r.faq.q)}</div>
+      <div class="rel-a">${esc(r.faq.a.slice(0,75))}…</div>
+    </button>`
+  ).join('');
+
+  row.innerHTML = `<div class="av-sm" style="opacity:0;pointer-events:none"></div><div class="msg-wrap" style="max-width:75%"><div class="related-head">Related questions</div>${cards}</div>`;
+  msgsEl.appendChild(row);
+  scroll();
+}
+
+function addTypingIndicator() {
+  const row = document.createElement('div');
+  row.className = 'row bot typing-row';
+  row.id = 'typing';
+  row.innerHTML = `<div class="av-sm"><svg viewBox="0 0 22 22" fill="none"><circle cx="11" cy="8" r="3.5" fill="white" opacity=".9"/><path d="M4 19c0-3.866 3.134-7 7-7h2c3.866 0 7 3.134 7 7" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity=".9"/></svg></div><div class="msg-wrap"><div class="bubble"><div class="dots"><span></span><span></span><span></span></div></div></div>`;
+  msgsEl.appendChild(row);
+  scroll();
+  return row;
+}
+
+// ── SEND ──
+async function send() {
+  const inp = document.getElementById('txt');
+  const q = inp.value.trim();
+  if (!q || !useModel) return;
+  inp.value = '';
+  document.getElementById('chips').innerHTML = '';
+  addUserMsg(q);
+  conversationHistory.push({ role: 'user', text: q });
+
+  document.getElementById('thinking-wave').classList.add('show');
+  document.getElementById('hdrsub').textContent = '● Computing embeddings…';
+  document.getElementById('send').disabled = true;
+  const typRow = addTypingIndicator();
+
+  try {
+    // Use conversation context for follow-up queries (e.g. "what about express?")
+    const contextualQuery = buildContextualQuery(q);
+    const results = await semanticSearch(contextualQuery);
+    const best = results[0];
+
+    if (best.sim < 0.5) {
+      // Low confidence — try Groq generative fallback
+      document.getElementById('hdrsub').textContent = '● Consulting Llama 3.1 (fallback)…';
+      const fallback = await groqFallback(q);
+
+      typRow.remove();
+      document.getElementById('thinking-wave').classList.remove('show');
+      document.getElementById('hdrsub').textContent = '● Online · Semantic matching active';
+      document.getElementById('send').disabled = false;
+
+      if (fallback.ok) {
+        addBotMsg(fallback.text, 0, false, 'groq');
+        conversationHistory.push({ role: 'bot', text: fallback.text });
+      } else {
+        let msg = "I couldn't find a confident match for that.";
+        if (fallback.reason === 'no-worker') msg += " (Generative fallback is disabled — Worker URL not configured.)";
+        else if (fallback.reason === 'limit') msg += " (Fallback limit reached — try again later.)";
+        msg += " Try rephrasing, or pick a category from the sidebar.";
+        addBotMsg(msg, 0, false);
+        conversationHistory.push({ role: 'bot', text: msg });
+      }
+      showChips(defaultChips);
+      updateStats(best.sim);
+      return;
+    }
+
+    typRow.remove();
+    document.getElementById('thinking-wave').classList.remove('show');
+    document.getElementById('hdrsub').textContent = '● Online · Semantic matching active';
+    document.getElementById('send').disabled = false;
+
+    addBotMsg(best.faq.a, best.sim, false);
+    conversationHistory.push({ role: 'bot', text: best.faq.a });
+    addRelated(results);
+    updateStats(best.sim);
+
+    // show related category chips
+    const catChips = FAQS.filter(f => f.cat === best.faq.cat && f.q !== best.faq.q).slice(0,3).map(f=>f.q);
+    showChips(catChips.length ? catChips : defaultChips);
+
+  } catch(e) {
+    typRow.remove();
+    document.getElementById('thinking-wave').classList.remove('show');
+    document.getElementById('send').disabled = false;
+    addBotMsg('Something went wrong with the embedding model. Please refresh and try again.', 0, false);
+  }
+}
+
+function updateStats(sim) {
+  asked++;
+  totalSim += sim;
+  document.getElementById('s-asked').textContent = asked;
+  document.getElementById('s-conf').textContent = Math.round((totalSim / asked) * 100) + '%';
+  const memTurns = Math.min(MEMORY_TURNS, Math.floor(conversationHistory.length / 2));
+  document.getElementById('s-mem').textContent = memTurns + '/' + MEMORY_TURNS;
+}
+
+function clearChat() {
+  msgsEl.innerHTML = '';
+  asked = 0; totalSim = 0;
+  conversationHistory = [];
+  document.getElementById('s-asked').textContent = '0';
+  document.getElementById('s-conf').textContent = '—';
+  document.getElementById('s-mem').textContent = '0/' + MEMORY_TURNS;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  activeCat = null;
+  showWelcome();
+  showChips(defaultChips);
+}
+
+function showWelcome() {
+  const row = document.createElement('div');
+  row.className = 'row bot';
+  row.innerHTML = `<div class="av-sm"><svg viewBox="0 0 22 22" fill="none"><circle cx="11" cy="8" r="3.5" fill="white" opacity=".9"/><path d="M4 19c0-3.866 3.134-7 7-7h2c3.866 0 7 3.134 7 7" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity=".9"/></svg></div>
+  <div class="msg-wrap" style="max-width:82%">
+    <div class="bubble">
+      <div class="welcome-msg">
+        Hi! I'm <strong>NexBot</strong> — a semantic FAQ chatbot powered by <strong>word embeddings</strong>.<br><br>
+        I understand the <em>meaning</em> of your question, not just keywords. Try saying <strong>"I forgot my login"</strong> or <strong>"package is late"</strong> — I'll match them correctly even with no shared words.
+      </div>
+      <div class="quick-grid">
+        <div class="qcard" onclick="document.getElementById('txt').value='my package is late';send()"><div class="qcard-icon">📦</div><div class="qcard-title">Track order</div><div class="qcard-desc">Shipping & delivery</div></div>
+        <div class="qcard" onclick="document.getElementById('txt').value='I want my money back';send()"><div class="qcard-icon">↩️</div><div class="qcard-title">Refunds</div><div class="qcard-desc">Returns & policies</div></div>
+        <div class="qcard" onclick="document.getElementById('txt').value='I cannot log into my account';send()"><div class="qcard-icon">🔐</div><div class="qcard-title">Account access</div><div class="qcard-desc">Login & security</div></div>
+        <div class="qcard" onclick="document.getElementById('txt').value='stop charging me';send()"><div class="qcard-icon">💳</div><div class="qcard-title">Billing</div><div class="qcard-desc">Payments & plans</div></div>
+      </div>
+    </div>
+  </div>`;
+  msgsEl.appendChild(row);
+  scroll();
+}
+
+function scroll() { msgsEl.scrollTop = msgsEl.scrollHeight; }
+function esc(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+document.getElementById('txt').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+
+// Boot
+loadModel();
+</script>
+</body>
+</html>

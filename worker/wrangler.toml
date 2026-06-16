@@ -1,0 +1,15 @@
+# Cloudflare Worker config for NexBot's Groq proxy.
+# Docs: https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "nexbot-groq-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Set this to your deployed Vercel frontend URL, e.g. "https://nexbot.vercel.app"
+# Using "*" works but allows any site to call your Worker — lock this down
+# once you know your Vercel URL.
+[vars]
+ALLOWED_ORIGIN = "*"
+
+# GROQ_API_KEY is NOT set here — it's a secret, set via:
+#   wrangler secret put GROQ_API_KEY
