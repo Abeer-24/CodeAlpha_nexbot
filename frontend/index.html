@@ -567,7 +567,7 @@ function addBotMsg(content, sim, isHTML, source) {
 }
 
 function addRelated(results) {
-  const sec = results.slice(1).filter(r => r.sim > 0.55).slice(0,2);
+  const sec = results.slice(1).filter(r => r.sim > 0.65).slice(0,2);
   if (!sec.length) return;
   const row = document.createElement('div');
   row.className = 'row bot'; row.style.animationDelay = '.1s';
@@ -631,7 +631,7 @@ async function send() {
     const results = await semanticSearch(ctx);
     const best = results[0];
 
-    if (best.sim >= 0.55) {
+    if (best.sim >= 0.65) {
       typRow.remove();
       document.getElementById('wave').classList.remove('show');
       document.getElementById('hdrsub').textContent = '● Online · Hybrid NLP active';
