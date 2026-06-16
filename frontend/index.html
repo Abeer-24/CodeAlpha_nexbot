@@ -592,7 +592,7 @@ function addBotMsg(html, sim, isRaw, source) {
 
 function addRelated(results) {
   if (!results || results.length < 2) return;
-  const secondaries = results.slice(1).filter(r => r.sim > 0.72);
+  const secondaries = results.slice(1).filter(r => r.sim > 0.48);
   if (!secondaries.length) return;
 
   const row = document.createElement('div');
@@ -641,7 +641,7 @@ async function send() {
     const results = await semanticSearch(contextualQuery);
     const best = results[0];
 
-    if (best.sim < 0.75) {
+    if (best.sim < 0.45) {
       // Low confidence — try Groq generative fallback
       document.getElementById('hdrsub').textContent = '● Consulting Llama 3.1 (fallback)…';
       const fallback = await groqFallback(q);
