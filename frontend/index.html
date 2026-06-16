@@ -409,7 +409,7 @@ async function loadModel() {
     setProgress(65, 'Computing FAQ embeddings…');
     document.getElementById('load-sub').textContent = 'Encoding 20 FAQs into 512-dimensional vectors…';
 
-    const sentences = FAQS.map(f => f.q + ' ' + f.a);
+    const sentences = FAQS.map(f => f.q);
     faqEmbeddings = await useModel.embed(sentences);
 
     setProgress(90, 'Normalising embedding matrix…');
