@@ -4,219 +4,189 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>NexBot — Semantic FAQ Chatbot</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=DM+Sans:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder@1.3.3/dist/universal-sentence-encoder.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0D0E14;
-  --surface:#16181F;
-  --surface2:#1E2029;
-  --surface3:#252830;
-  --border:rgba(255,255,255,0.07);
-  --border2:rgba(255,255,255,0.12);
-  --accent:#7C6EF7;
-  --accent2:#A99BFF;
-  --accent-glow:rgba(124,110,247,0.25);
-  --green:#22C55E;
-  --green-dim:rgba(34,197,94,0.15);
-  --amber:#F59E0B;
-  --red:#EF4444;
-  --text:#F0F0F5;
-  --text2:#9899A8;
-  --text3:#5A5B6A;
-  --user-bubble:#7C6EF7;
+  --bg:#0D0E14;--surface:#16181F;--surface2:#1E2029;--surface3:#252830;
+  --border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.12);
+  --accent:#7C6EF7;--accent2:#A99BFF;--accent3:#EEF2FF;
+  --green:#22C55E;--green-dim:rgba(34,197,94,.15);
+  --amber:#F59E0B;--red:#EF4444;
+  --text:#F0F0F5;--text2:#9899A8;--text3:#5A5B6A;
 }
-html,body{height:100%;background:var(--bg);font-family:'Inter',sans-serif;color:var(--text)}
+html,body{height:100%;background:var(--bg);font-family:'Inter',sans-serif;color:var(--text);overflow:hidden}
+#app{display:flex;height:100vh}
 
-/* ── LAYOUT ── */
-#app{display:flex;height:100vh;max-height:100vh}
-
-/* ── SIDEBAR ── */
+/* SIDEBAR */
 #sidebar{width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
-#logo-area{padding:22px 18px 18px;border-bottom:1px solid var(--border)}
+#logo-area{padding:20px 18px 16px;border-bottom:1px solid var(--border)}
 .logo-wrap{display:flex;align-items:center;gap:10px}
 .logo-icon{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#7C6EF7,#B8AEFF);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .logo-icon svg{width:20px;height:20px}
-.logo-text .name{font-size:15px;font-weight:600;color:var(--text);letter-spacing:-.3px}
-.logo-text .tag{font-size:10px;color:var(--accent2);font-weight:500;letter-spacing:.6px;text-transform:uppercase}
+.logo-name{font-size:15px;font-weight:600;color:var(--text);letter-spacing:-.3px}
+.logo-tag{font-size:10px;color:var(--accent2);font-weight:500;letter-spacing:.6px;text-transform:uppercase;margin-top:1px}
 
-/* model status */
-#model-status{padding:14px 18px;border-bottom:1px solid var(--border)}
-.status-row{display:flex;align-items:center;gap:8px}
-.status-dot{width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0;transition:background .4s}
-.status-dot.ready{background:var(--green);box-shadow:0 0 8px rgba(34,197,94,.5)}
-.status-dot.error{background:var(--red)}
-.status-label{font-size:12px;color:var(--text2);font-weight:500}
-.model-badge{margin-top:8px;display:inline-flex;align-items:center;gap:5px;background:rgba(124,110,247,.12);border:1px solid rgba(124,110,247,.25);border-radius:6px;padding:4px 8px;font-size:10px;color:var(--accent2);font-weight:500}
-.model-badge svg{width:10px;height:10px;opacity:.7}
+#model-status{padding:12px 18px;border-bottom:1px solid var(--border)}
+.status-row{display:flex;align-items:center;gap:7px}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0;transition:background .4s}
+.sdot.ready{background:var(--green);box-shadow:0 0 8px rgba(34,197,94,.5)}
+.sdot.error{background:var(--red)}
+.slabel{font-size:12px;color:var(--text2);font-weight:500}
+.model-pill{margin-top:8px;display:inline-flex;align-items:center;gap:5px;background:rgba(124,110,247,.1);border:1px solid rgba(124,110,247,.2);border-radius:6px;padding:4px 8px;font-size:10px;color:var(--accent2);font-weight:500}
 #load-bar-wrap{margin-top:8px;height:3px;background:var(--surface3);border-radius:2px;overflow:hidden;display:none}
 #load-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width .3s}
 
-/* stats */
-#stats-panel{padding:14px 18px;border-bottom:1px solid var(--border)}
-.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.stat-card{background:var(--surface2);border-radius:8px;padding:10px;border:1px solid var(--border)}
-.stat-val{font-size:18px;font-weight:600;color:var(--text);line-height:1}
-.stat-val.accent{color:var(--accent2)}
-.stat-lbl{font-size:10px;color:var(--text3);margin-top:3px;font-weight:500;letter-spacing:.3px;text-transform:uppercase}
+#stats-panel{padding:12px 18px;border-bottom:1px solid var(--border)}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.stat-card{background:var(--surface2);border-radius:8px;padding:9px 10px;border:1px solid var(--border)}
+.stat-val{font-size:17px;font-weight:600;color:var(--text);line-height:1}
+.stat-val.ac{color:var(--accent2)}
+.stat-lbl{font-size:10px;color:var(--text3);margin-top:3px;text-transform:uppercase;letter-spacing:.3px}
+.groq-pill{margin-top:8px;display:inline-flex;align-items:center;gap:5px;background:rgba(124,110,247,.08);border:1px solid rgba(124,110,247,.18);border-radius:6px;padding:4px 8px;font-size:10px;color:var(--text3)}
 
-/* categories */
-#cat-area{flex:1;padding:14px 12px;overflow-y:auto}
-.section-head{font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.8px;text-transform:uppercase;padding:0 6px;margin-bottom:8px}
-.cat-btn{width:100%;display:flex;align-items:center;gap:8px;padding:8px 8px;border-radius:8px;cursor:pointer;margin-bottom:2px;background:none;border:none;text-align:left;transition:background .15s;color:var(--text2)}
+#cat-area{flex:1;padding:12px;overflow-y:auto}
+.sec-head{font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.8px;text-transform:uppercase;padding:0 6px;margin-bottom:6px}
+.cat-btn{width:100%;display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;cursor:pointer;margin-bottom:2px;background:none;border:none;text-align:left;transition:background .15s;color:var(--text2)}
 .cat-btn:hover{background:var(--surface2);color:var(--text)}
 .cat-btn.active{background:rgba(124,110,247,.15);color:var(--text)}
 .cat-pip{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.cat-name{font-size:12px;font-family:'Inter',sans-serif;flex:1}
-.cat-n{font-size:10px;background:var(--surface3);color:var(--text3);padding:2px 6px;border-radius:10px;font-weight:500}
+.cat-name{font-size:12px;flex:1}
+.cat-n{font-size:10px;background:var(--surface3);color:var(--text3);padding:2px 6px;border-radius:10px}
 .cat-btn.active .cat-n{background:rgba(124,110,247,.25);color:var(--accent2)}
 
-#sb-footer{padding:12px 18px;border-top:1px solid var(--border)}
-.engine-tag{font-size:10px;color:var(--text3);display:flex;align-items:center;gap:5px}
+#sb-foot{padding:12px 18px;border-top:1px solid var(--border)}
+.pulse-wrap{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)}
 .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}70%{box-shadow:0 0 0 6px transparent}100%{box-shadow:0 0 0 0 transparent}}
 
-/* ── MAIN ── */
+/* MAIN */
 #main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
 
-/* header */
-#chat-header{padding:14px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--surface);flex-shrink:0}
+#chat-hdr{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--surface);flex-shrink:0}
 .bot-av{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#7C6EF7,#B8AEFF);display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;overflow:hidden}
-.bot-av-icon{width:22px;height:22px;transition:opacity .2s}
-.bot-av-wave{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:2px;opacity:0;transition:opacity .2s}
-.bot-av-wave.show{opacity:1}
+.bot-av-icon{width:22px;height:22px}
+.wave-wrap{position:absolute;inset:0;background:linear-gradient(135deg,#7C6EF7,#B8AEFF);display:flex;align-items:center;justify-content:center;gap:2px;opacity:0;transition:opacity .2s}
+.wave-wrap.show{opacity:1}
 .wv{width:3px;border-radius:2px;background:rgba(255,255,255,.9);animation:wv 1s ease-in-out infinite}
-.wv:nth-child(1){height:5px;animation-delay:0s}
-.wv:nth-child(2){height:12px;animation-delay:.1s}
-.wv:nth-child(3){height:7px;animation-delay:.2s}
-.wv:nth-child(4){height:14px;animation-delay:.15s}
-.wv:nth-child(5){height:5px;animation-delay:.05s}
+.wv:nth-child(1){height:5px}.wv:nth-child(2){height:12px;animation-delay:.1s}.wv:nth-child(3){height:7px;animation-delay:.2s}.wv:nth-child(4){height:14px;animation-delay:.15s}.wv:nth-child(5){height:5px;animation-delay:.05s}
 @keyframes wv{0%,100%{transform:scaleY(.4);opacity:.5}50%{transform:scaleY(1);opacity:1}}
-.hdr-info .bot-name{font-size:14px;font-weight:600;color:var(--text);font-family:'DM Sans',sans-serif}
-.hdr-info .bot-sub{font-size:12px;color:var(--green);font-weight:500}
-.hdr-info .bot-sub.loading{color:var(--amber)}
+.hdr-name{font-size:14px;font-weight:600;color:var(--text);font-family:'DM Sans',sans-serif}
+.hdr-sub{font-size:12px;color:var(--green);font-weight:500}
+.hdr-sub.loading{color:var(--amber)}
 #hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px}
-.embed-pill{font-size:10px;background:rgba(124,110,247,.12);border:1px solid rgba(124,110,247,.25);border-radius:20px;padding:4px 10px;color:var(--accent2);font-weight:500;letter-spacing:.2px}
+.em-pill{font-size:10px;background:rgba(124,110,247,.12);border:1px solid rgba(124,110,247,.22);border-radius:20px;padding:4px 10px;color:var(--accent2);font-weight:500}
 .clear-btn{width:32px;height:32px;border-radius:8px;background:none;border:1px solid var(--border2);cursor:pointer;color:var(--text3);display:flex;align-items:center;justify-content:center;transition:all .15s}
-.clear-btn:hover{background:var(--surface2);color:var(--text2);border-color:var(--border2)}
+.clear-btn:hover{background:var(--surface2);color:var(--text2)}
 .clear-btn svg{width:15px;height:15px}
 
-/* messages */
-#msgs{flex:1;overflow-y:auto;padding:22px;display:flex;flex-direction:column;gap:18px}
+/* MESSAGES */
+#msgs{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px;scroll-behavior:smooth}
 #msgs::-webkit-scrollbar{width:4px}
 #msgs::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:4px}
-.row{display:flex;gap:10px;align-items:flex-end;opacity:0;transform:translateY(12px);animation:fadeUp .3s ease forwards}
-@keyframes fadeUp{to{opacity:1;transform:translateY(0)}}
+.row{display:flex;gap:10px;align-items:flex-end;opacity:0;transform:translateY(10px);animation:up .3s ease forwards}
+@keyframes up{to{opacity:1;transform:translateY(0)}}
 .row.user{flex-direction:row-reverse}
-.av-sm{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#7C6EF7,#B8AEFF);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.av-sm svg{width:17px;height:17px}
-.user-av{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#0EA5E9,#7DD3FC);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff;flex-shrink:0}
-.msg-wrap{max-width:70%;display:flex;flex-direction:column;gap:5px}
-.row.user .msg-wrap{align-items:flex-end}
-.bubble{padding:12px 16px;border-radius:16px;font-size:13.5px;line-height:1.65;font-family:'DM Sans',sans-serif;word-break:break-word}
+.av{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#7C6EF7,#B8AEFF);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.av svg{width:17px;height:17px}
+.uav{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#0EA5E9,#7DD3FC);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff;flex-shrink:0}
+.mwrap{max-width:70%;display:flex;flex-direction:column;gap:4px}
+.row.user .mwrap{align-items:flex-end}
+.bubble{padding:11px 15px;border-radius:16px;font-size:13.5px;line-height:1.65;font-family:'DM Sans',sans-serif;word-break:break-word}
 .bot .bubble{background:var(--surface2);color:var(--text);border-bottom-left-radius:4px;border:1px solid var(--border2)}
-.user .bubble{background:var(--user-bubble);color:#fff;border-bottom-right-radius:4px}
-.msg-time{font-size:10px;color:var(--text3)}
+.user .bubble{background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.mtime{font-size:10px;color:var(--text3)}
 
-/* semantic score bar */
-.sem-bar-wrap{display:flex;align-items:center;gap:8px;margin-top:2px}
-.sem-bar-bg{flex:1;height:3px;background:var(--surface3);border-radius:2px;overflow:hidden;max-width:100px}
-.sem-bar-fill{height:100%;border-radius:2px;transition:width .5s ease}
-.sem-label{font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px}
-.sem-label.high{background:var(--green-dim);color:var(--green)}
-.sem-label.mid{background:rgba(245,158,11,.12);color:var(--amber)}
-.sem-label.low{background:rgba(239,68,68,.1);color:var(--red)}
-.tech-tags{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
-.tech-tag{font-size:10px;color:var(--text3);background:var(--surface3);border-radius:4px;padding:2px 6px;border:1px solid var(--border)}
+/* score bar */
+.score-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:2px}
+.sbar-bg{width:80px;height:3px;background:var(--surface3);border-radius:2px;overflow:hidden}
+.sbar-fill{height:100%;border-radius:2px}
+.sbadge{font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px}
+.sbadge.high{background:var(--green-dim);color:var(--green)}
+.sbadge.mid{background:rgba(245,158,11,.12);color:var(--amber)}
+.sbadge.low{background:rgba(239,68,68,.1);color:var(--red)}
+.sbadge.kw{background:rgba(124,110,247,.15);color:var(--accent2)}
+.tech-row{display:flex;gap:4px;margin-top:3px;flex-wrap:wrap}
+.tech{font-size:10px;color:var(--text3);background:var(--surface3);border-radius:4px;padding:2px 6px;border:1px solid var(--border)}
 
 /* related */
-.related-head{font-size:11px;color:var(--text3);font-weight:500;margin-bottom:6px}
-.rel-card{background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;cursor:pointer;margin-bottom:6px;transition:all .2s;text-align:left;width:100%}
+.rel-head{font-size:11px;color:var(--text3);font-weight:500;margin-bottom:5px}
+.rel-card{background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:9px 12px;cursor:pointer;margin-bottom:5px;transition:all .18s;text-align:left;width:100%}
 .rel-card:hover{border-color:var(--accent);background:rgba(124,110,247,.08)}
-.rel-q{font-size:12px;font-weight:500;color:var(--accent2);margin-bottom:3px;font-family:'DM Sans',sans-serif}
+.rel-q{font-size:12px;font-weight:500;color:var(--accent2);margin-bottom:2px;font-family:'DM Sans',sans-serif}
 .rel-a{font-size:11.5px;color:var(--text2);line-height:1.5}
 
 /* typing */
-.typing-row .bubble{padding:12px 16px}
-.dots{display:flex;gap:4px;align-items:center}
+.dots{display:flex;gap:4px;align-items:center;padding:2px 0}
 .dots span{width:6px;height:6px;border-radius:50%;background:var(--text3);animation:dot 1.2s infinite}
-.dots span:nth-child(2){animation-delay:.2s}
-.dots span:nth-child(3){animation-delay:.4s}
+.dots span:nth-child(2){animation-delay:.2s}.dots span:nth-child(3){animation-delay:.4s}
 @keyframes dot{0%,80%,100%{opacity:.2;transform:scale(.7)}40%{opacity:1;transform:scale(1)}}
 
-/* chips */
-#chips{padding:0 22px 12px;display:flex;flex-wrap:wrap;gap:6px}
-.chip{padding:6px 13px;border-radius:20px;border:1px solid rgba(124,110,247,.35);background:rgba(124,110,247,.08);color:var(--accent2);font-size:12px;font-weight:500;cursor:pointer;transition:all .18s;font-family:'DM Sans',sans-serif;white-space:nowrap}
+/* CHIPS */
+#chips{padding:0 20px 10px;display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:6px 13px;border-radius:20px;border:1px solid rgba(124,110,247,.3);background:rgba(124,110,247,.07);color:var(--accent2);font-size:12px;font-weight:500;cursor:pointer;transition:all .18s;font-family:'DM Sans',sans-serif;white-space:nowrap}
 .chip:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
 
-/* input */
-#input-area{padding:14px 22px 18px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0}
-#input-box{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1.5px solid var(--border2);border-radius:14px;padding:8px 8px 8px 18px;transition:border-color .2s}
-#input-box:focus-within{border-color:var(--accent)}
+/* INPUT */
+#input-area{padding:12px 20px 16px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0}
+#ibox{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1.5px solid var(--border2);border-radius:14px;padding:8px 8px 8px 16px;transition:border-color .2s}
+#ibox:focus-within{border-color:var(--accent)}
 #txt{flex:1;background:none;border:none;outline:none;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;caret-color:var(--accent)}
 #txt::placeholder{color:var(--text3)}
-#txt:disabled{opacity:.5;cursor:not-allowed}
+#txt:disabled{opacity:.4;cursor:not-allowed}
 #send{width:38px;height:38px;border-radius:10px;border:none;background:var(--accent);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
 #send:hover:not(:disabled){background:#6A5EE5;transform:scale(1.05)}
-#send:disabled{opacity:.4;cursor:not-allowed}
+#send:disabled{opacity:.35;cursor:not-allowed}
 #send svg{width:16px;height:16px}
-#hint{margin-top:8px;font-size:11px;color:var(--text3);text-align:center}
+#hint{margin-top:7px;font-size:11px;color:var(--text3);text-align:center}
 
-/* welcome */
-.welcome-msg{font-size:14px;line-height:1.65;color:var(--text);font-family:'DM Sans',sans-serif}
-.welcome-msg strong{color:var(--accent2);font-weight:500}
-.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
-.qcard{background:var(--surface3);border:1px solid var(--border2);border-radius:12px;padding:12px;cursor:pointer;transition:all .2s;text-align:left}
-.qcard:hover{border-color:var(--accent);background:rgba(124,110,247,.08)}
-.qcard-icon{font-size:17px;margin-bottom:5px}
-.qcard-title{font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px}
-.qcard-desc{font-size:11px;color:var(--text3);line-height:1.4}
+/* WELCOME */
+.wgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.wcard{background:var(--surface3);border:1px solid var(--border2);border-radius:12px;padding:11px;cursor:pointer;transition:all .18s;text-align:left}
+.wcard:hover{border-color:var(--accent);background:rgba(124,110,247,.08)}
+.wcard-icon{font-size:17px;margin-bottom:4px}
+.wcard-title{font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px}
+.wcard-desc{font-size:11px;color:var(--text3);line-height:1.4}
 
-/* loading overlay */
-#loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:100;transition:opacity .5s}
-#loading-screen.hide{opacity:0;pointer-events:none}
-.load-logo{width:60px;height:60px;border-radius:18px;background:linear-gradient(135deg,#7C6EF7,#B8AEFF);display:flex;align-items:center;justify-content:center;animation:breathe 2s ease-in-out infinite}
+/* LOADING SCREEN */
+#loading{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;z-index:100;transition:opacity .5s}
+#loading.hide{opacity:0;pointer-events:none}
+.load-icon{width:58px;height:58px;border-radius:18px;background:linear-gradient(135deg,#7C6EF7,#B8AEFF);display:flex;align-items:center;justify-content:center;animation:breathe 2s ease-in-out infinite}
 @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
-.load-logo svg{width:34px;height:34px}
+.load-icon svg{width:32px;height:32px}
 .load-title{font-size:18px;font-weight:600;color:var(--text);letter-spacing:-.3px}
 .load-sub{font-size:13px;color:var(--text2);text-align:center;max-width:280px;line-height:1.5}
-.load-prog-wrap{width:220px;height:4px;background:var(--surface2);border-radius:4px;overflow:hidden}
-.load-prog{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;transition:width .4s ease}
+.load-bar-wrap{width:220px;height:4px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.load-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;transition:width .4s ease}
 .load-step{font-size:11px;color:var(--text3);min-height:16px}
-.load-tech{display:flex;gap:8px;margin-top:4px}
-.load-tech span{font-size:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:3px 8px;color:var(--text3)}
+.load-techs{display:flex;gap:6px;margin-top:2px}
+.load-techs span{font-size:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:3px 8px;color:var(--text3)}
 
-@media(max-width:600px){#sidebar{display:none}#app{flex-direction:column}}
+@media(max-width:600px){#sidebar{display:none}}
 </style>
 </head>
 <body>
 
-<!-- Loading screen -->
-<div id="loading-screen">
-  <div class="load-logo">
-    <svg viewBox="0 0 34 34" fill="none">
-      <circle cx="17" cy="17" r="8" fill="none" stroke="white" stroke-width="2"/>
-      <circle cx="17" cy="17" r="3" fill="white"/>
-      <line x1="17" y1="6" x2="17" y2="3" stroke="white" stroke-width="2" stroke-linecap="round"/>
-      <line x1="17" y1="31" x2="17" y2="28" stroke="white" stroke-width="2" stroke-linecap="round"/>
-      <line x1="6" y1="17" x2="3" y2="17" stroke="white" stroke-width="2" stroke-linecap="round"/>
-      <line x1="31" y1="17" x2="28" y2="17" stroke="white" stroke-width="2" stroke-linecap="round"/>
+<div id="loading">
+  <div class="load-icon">
+    <svg viewBox="0 0 32 32" fill="none">
+      <circle cx="16" cy="16" r="7" fill="none" stroke="white" stroke-width="2"/>
+      <circle cx="16" cy="16" r="2.5" fill="white"/>
+      <line x1="16" y1="6" x2="16" y2="3" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      <line x1="16" y1="29" x2="16" y2="26" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      <line x1="6" y1="16" x2="3" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      <line x1="29" y1="16" x2="26" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/>
     </svg>
   </div>
-  <div>
-    <div class="load-title">NexBot</div>
-  </div>
-  <div class="load-sub" id="load-sub">Loading Universal Sentence Encoder…</div>
-  <div class="load-prog-wrap"><div class="load-prog" id="load-prog"></div></div>
-  <div class="load-step" id="load-step">Fetching TensorFlow.js model</div>
-  <div class="load-tech">
-    <span>USE v1.3</span><span>TF.js 4.17</span><span>512-dim</span>
-  </div>
+  <div class="load-title">NexBot</div>
+  <div class="load-sub" id="lsub">Loading Universal Sentence Encoder…</div>
+  <div class="load-bar-wrap"><div class="load-bar" id="lbar"></div></div>
+  <div class="load-step" id="lstep">Fetching TensorFlow.js model</div>
+  <div class="load-techs"><span>USE v1.3</span><span>TF.js 4.17</span><span>512-dim</span><span>Hybrid NLP</span></div>
 </div>
 
-<!-- Main app -->
 <div id="app">
   <div id="sidebar">
     <div id="logo-area">
@@ -231,80 +201,53 @@ html,body{height:100%;background:var(--bg);font-family:'Inter',sans-serif;color:
             <line x1="19" y1="10" x2="17" y2="10" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
         </div>
-        <div class="logo-text">
-          <div class="name">NexBot</div>
-          <div class="tag">Semantic AI</div>
-        </div>
+        <div><div class="logo-name">NexBot</div><div class="logo-tag">Semantic AI</div></div>
       </div>
     </div>
 
     <div id="model-status">
-      <div class="status-row">
-        <div class="status-dot" id="sdot"></div>
-        <span class="status-label" id="slabel">Loading model…</span>
-      </div>
-      <div class="model-badge">
-        <svg viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1"/><circle cx="5" cy="5" r="1.5" fill="currentColor"/></svg>
-        Universal Sentence Encoder
-      </div>
+      <div class="status-row"><div class="sdot" id="sdot"></div><span class="slabel" id="slabel">Loading model…</span></div>
+      <div class="model-pill">USE · Keyword Hybrid</div>
       <div id="load-bar-wrap"><div id="load-bar"></div></div>
     </div>
 
     <div id="stats-panel">
       <div class="stat-grid">
-        <div class="stat-card">
-          <div class="stat-val accent" id="s-asked">0</div>
-          <div class="stat-lbl">Asked</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val" id="s-faqs">20</div>
-          <div class="stat-lbl">FAQs</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val accent" id="s-conf">—</div>
-          <div class="stat-lbl">Avg sim</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val" id="s-mem">0/3</div>
-          <div class="stat-lbl">Memory</div>
-        </div>
+        <div class="stat-card"><div class="stat-val ac" id="s-asked">0</div><div class="stat-lbl">Asked</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-faqs">20</div><div class="stat-lbl">FAQs</div></div>
+        <div class="stat-card"><div class="stat-val ac" id="s-conf">—</div><div class="stat-lbl">Avg sim</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-mem">0/3</div><div class="stat-lbl">Memory</div></div>
       </div>
-      <div class="model-badge" id="groq-badge" style="margin-top:8px">
-        <svg viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1"/><circle cx="5" cy="5" r="1.5" fill="currentColor"/></svg>
-        <span id="groq-badge-text">Groq fallback: no key set</span>
-      </div>
+      <div class="groq-pill" id="groq-pill">Groq fallback: checking…</div>
     </div>
 
     <div id="cat-area">
-      <div class="section-head">Topics</div>
+      <div class="sec-head">Topics</div>
       <div id="cat-list"></div>
     </div>
 
-    <div id="sb-footer">
-      <div class="engine-tag">
-        <div class="pulse"></div>
-        Word embeddings active
-      </div>
+    <div id="sb-foot">
+      <div class="pulse-wrap"><div class="pulse"></div>Hybrid NLP active</div>
     </div>
   </div>
 
   <div id="main">
-    <div id="chat-header">
+    <div id="chat-hdr">
       <div class="bot-av" id="botav">
         <svg class="bot-av-icon" viewBox="0 0 22 22" fill="none">
           <circle cx="11" cy="8" r="3.5" fill="white" opacity=".9"/>
           <path d="M4 19c0-3.866 3.134-7 7-7h2c3.866 0 7 3.134 7 7" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity=".9"/>
         </svg>
-        <div class="bot-av-wave" id="thinking-wave">
+        <div class="wave-wrap" id="wave">
           <div class="wv"></div><div class="wv"></div><div class="wv"></div><div class="wv"></div><div class="wv"></div>
         </div>
       </div>
-      <div class="hdr-info">
-        <div class="bot-name">NexBot Assistant</div>
-        <div class="bot-sub loading" id="hdrsub">Loading embeddings…</div>
+      <div>
+        <div class="hdr-name">NexBot Assistant</div>
+        <div class="hdr-sub loading" id="hdrsub">Loading embeddings…</div>
       </div>
       <div id="hdr-right">
-        <div class="embed-pill">USE · 512d</div>
+        <div class="em-pill">USE + Keywords</div>
         <button class="clear-btn" onclick="clearChat()" title="Clear chat">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
             <path d="M2 4h12M5 4V3a1 1 0 011-1h4a1 1 0 011 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9"/>
@@ -317,176 +260,161 @@ html,body{height:100%;background:var(--bg);font-family:'Inter',sans-serif;color:
     <div id="chips"></div>
 
     <div id="input-area">
-      <div id="input-box">
-        <input id="txt" type="text" placeholder="Ask anything… (model loading)" disabled autocomplete="off"/>
+      <div id="ibox">
+        <input id="txt" type="text" placeholder="Ask anything… (loading model)" disabled autocomplete="off"/>
         <button id="send" onclick="send()" disabled>
           <svg viewBox="0 0 16 16" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M14 2L2 6.5l5 2 2 5L14 2z"/>
           </svg>
         </button>
       </div>
-      <div id="hint">Semantic matching via Universal Sentence Encoder · 512-dimensional embeddings · Free &amp; offline after load</div>
+      <div id="hint">Hybrid NLP · USE Embeddings + Keyword Matching · Groq Fallback · Zero exposed secrets</div>
     </div>
   </div>
 </div>
 
 <script>
-// ══════════════════════════════════════════════════════════
-// CONFIG — Groq fallback via Cloudflare Worker proxy
-// The Worker holds the real Groq API key server-side, so
-// nothing secret ever ships to the browser. Safe to deploy
-// publicly with this file as-is, once WORKER_URL is set.
-//
-// Setup: deploy /worker with `wrangler deploy`, then paste
-// the resulting *.workers.dev URL below.
-// ══════════════════════════════════════════════════════════
+// ══════════════════════════════════
+// CONFIG
+// ══════════════════════════════════
 const WORKER_URL = "https://nexbot-groq-proxy.saxenaabeer24.workers.dev";
-const GROQ_FALLBACK_LIMIT = 10; // soft client-side cap (Worker also rate-limits per IP)
+const GROQ_FALLBACK_LIMIT = 10;
 let groqCallsUsed = 0;
+const MEMORY_TURNS = 3;
+let conversationHistory = [];
 
-// ── FAQ DATA ──
+// ══════════════════════════════════
+// FAQ DATA
+// ══════════════════════════════════
 const FAQS = [
-  {cat:"Account", q:"How do I reset my password?", a:"Go to Settings → Security → Reset Password. Enter your email and we'll send a reset link expiring in 30 minutes. Check spam if you don't see it."},
-  {cat:"Account", q:"Can I change my email address?", a:"Go to Settings → Profile → Edit Email. Enter your new email and verify it via the confirmation link. Change takes effect immediately after verification."},
-  {cat:"Account", q:"How do I delete my account?", a:"Go to Settings → Privacy → Delete Account. All your data is permanently erased within 30 days. This cannot be undone — you lose all history and preferences."},
-  {cat:"Account", q:"How do I enable two-factor authentication?", a:"Go to Settings → Security → Two-Factor Auth. We support Google Authenticator, Authy, and SMS. Authenticator apps are more secure than SMS."},
-  {cat:"Payments", q:"What payment methods do you accept?", a:"We accept Visa, Mastercard, RuPay, UPI via GPay or PhonePe or Paytm, and Net Banking from all major Indian banks. All transactions use 256-bit SSL encryption."},
-  {cat:"Payments", q:"What happens if my payment fails?", a:"We retry your payment 3 times over 3 days automatically. If all retries fail, your order is paused. Update your card or UPI under Billing Settings to reactivate. No charges for failed attempts."},
-  {cat:"Payments", q:"How do I get an invoice for my purchase?", a:"Invoices are emailed after every successful payment. Download them from Orders → Select Order → Download Invoice. GST invoices are available for business accounts."},
-  {cat:"Orders", q:"How long does delivery and shipping take?", a:"Standard delivery takes 5 to 7 business days. Express shipping takes 2 to 3 days and costs extra — select it at checkout. Same-day delivery is available in Delhi, Mumbai, Bangalore, and Hyderabad."},
-  {cat:"Orders", q:"How do I track my package and shipment?", a:"Visit My Orders and click the Track button next to your purchase. A live map with GPS courier location appears. You also get SMS and email notifications at every delivery milestone."},
-  {cat:"Orders", q:"Can I cancel my order before it ships?", a:"Cancellation is free within 2 hours of placing the order. After 2 hours the order enters processing and cannot be stopped. Go to My Orders, select the order, and tap Cancel for an instant full refund."},
-  {cat:"Returns", q:"How do I return a product and get my money back?", a:"Request a refund by going to My Orders, selecting the item, and tapping Return or Refund. We collect the item within 48 hours and credit your money back within 5 to 7 business days. No questions asked within 30 days."},
-  {cat:"Returns", q:"How long does a refund take to reach my account?", a:"Refunds are credited within 5 to 7 business days after item inspection. UPI and Paytm wallet refunds arrive in 1 to 3 days. Money always returns to your original payment method."},
-  {cat:"Returns", q:"I want my money back, how do I claim a refund?", a:"We offer a full money back guarantee within 30 days of delivery. Go to My Orders, pick the item, choose Return and Refund, and we handle collection and credit automatically. No need to call support."},
-  {cat:"Subscription", q:"How do I cancel my subscription and stop being charged?", a:"Go to Account → Subscription → Cancel Plan. Billing stops at the end of the current cycle — you keep access until then. Zero cancellation fees or penalties."},
-  {cat:"Subscription", q:"Do you offer a free trial before I pay?", a:"Yes, all new accounts get a 14-day free trial with full feature access including priority support. No credit card required to start. Trial auto-converts to the free plan when it ends."},
-  {cat:"Subscription", q:"How do I upgrade my subscription plan?", a:"Go to Billing → Upgrade Plan. Upgrades activate immediately and unused days on your current plan are prorated as credit. Annual plans give a 20% discount over monthly billing."},
-  {cat:"Privacy", q:"Is my personal data and information safe?", a:"Your data is encrypted at rest with AES-256 and in transit with TLS 1.3. We never sell data to third parties and are fully GDPR and India PDPB compliant. Export or delete your data anytime from Settings."},
-  {cat:"Support", q:"How do I contact customer support for help?", a:"Live chat is available Monday to Saturday 9am to 9pm IST. Email support@nexbot.in or call toll-free 1800-123-4567. Average chat response time is under 2 minutes."},
-  {cat:"Support", q:"Do you have a mobile app I can download?", a:"Yes, NexBot is available on iOS via the App Store and Android via Google Play. The app supports order tracking, returns, live chat, and push notifications for delivery updates."},
-  {cat:"Support", q:"Can I use this service outside India internationally?", a:"The service works in 45 plus countries with local currency pricing where supported. Same-day delivery and cash on delivery are India-only features. Check the availability map on our website for your country."}
+  {cat:"Account",  q:"How do I reset my password?",                      a:"Go to Settings → Security → Reset Password. Enter your email and we'll send a reset link expiring in 30 minutes. Check spam if you don't see it."},
+  {cat:"Account",  q:"Can I change my email address?",                   a:"Go to Settings → Profile → Edit Email. Enter your new email and verify it via the confirmation link. Change takes effect immediately after verification."},
+  {cat:"Account",  q:"How do I delete my account?",                      a:"Go to Settings → Privacy → Delete Account. All your data is permanently erased within 30 days. This cannot be undone — you lose all history and preferences."},
+  {cat:"Account",  q:"How do I enable two-factor authentication?",       a:"Go to Settings → Security → Two-Factor Auth. We support Google Authenticator, Authy, and SMS. Authenticator apps are more secure than SMS."},
+  {cat:"Payments", q:"What payment methods do you accept?",              a:"We accept Visa, Mastercard, RuPay, UPI via GPay, PhonePe or Paytm, and Net Banking from all major Indian banks. All transactions use 256-bit SSL encryption."},
+  {cat:"Payments", q:"What happens if my payment fails?",                a:"We retry your payment 3 times over 3 days automatically. If all retries fail, your order is paused. Update your card or UPI under Billing Settings to reactivate."},
+  {cat:"Payments", q:"How do I get an invoice for my purchase?",         a:"Invoices are emailed after every successful payment. Download them from Orders → Select Order → Download Invoice. GST invoices are available for business accounts."},
+  {cat:"Orders",   q:"How long does delivery and shipping take?",        a:"Standard delivery takes 5 to 7 business days. Express shipping takes 2 to 3 days and costs extra — select it at checkout. Same-day delivery is available in major cities."},
+  {cat:"Orders",   q:"How do I track my package and shipment?",          a:"Visit My Orders and click the Track button next to your purchase. A live map with GPS courier location appears. You also get SMS and email notifications at every milestone."},
+  {cat:"Orders",   q:"Can I cancel my order before it ships?",           a:"Cancellation is free within 2 hours of placing the order. After that the order enters processing. Go to My Orders → select the order → tap Cancel for an instant full refund."},
+  {cat:"Returns",  q:"How do I return a product and get my money back?", a:"Request a refund by going to My Orders → Return Item. We collect the item within 48 hours and credit your money back within 5 to 7 business days. No questions asked within 30 days."},
+  {cat:"Returns",  q:"How long does a refund take to reach my account?", a:"Refunds are credited within 5 to 7 business days after item inspection. UPI and wallet refunds arrive in 1 to 3 days. Money always returns to your original payment method."},
+  {cat:"Returns",  q:"I want my money back — how do I claim a refund?",  a:"We offer a full money-back guarantee within 30 days. Go to My Orders, pick the item, choose Return and Refund, and we handle the rest automatically. No need to call support."},
+  {cat:"Subscription", q:"How do I cancel my subscription?",            a:"Go to Account → Subscription → Cancel Plan. Billing stops at the end of the current cycle — you keep access until then. Zero cancellation fees or penalties."},
+  {cat:"Subscription", q:"Do you offer a free trial before I pay?",     a:"Yes, all new accounts get a 14-day free trial with full feature access including priority support. No credit card required. Trial auto-converts to the free plan when it ends."},
+  {cat:"Subscription", q:"How do I upgrade my subscription plan?",      a:"Go to Billing → Upgrade Plan. Upgrades activate immediately and unused days are prorated as credit. Annual plans give a 20% discount over monthly billing."},
+  {cat:"Privacy",  q:"Is my personal data and information safe?",        a:"Your data is encrypted at rest with AES-256 and in transit with TLS 1.3. We never sell data to third parties and are fully GDPR and India PDPB compliant."},
+  {cat:"Support",  q:"How do I contact customer support?",               a:"Live chat is available Monday to Saturday 9am to 9pm IST. Email support@nexbot.in or call toll-free 1800-123-4567. Average chat response time is under 2 minutes."},
+  {cat:"Support",  q:"Do you have a mobile app I can download?",         a:"Yes, NexBot is available on iOS via the App Store and Android via Google Play. The app supports order tracking, returns, live chat, and push notifications."},
+  {cat:"Support",  q:"Can I use this service outside India?",            a:"The service works in 45 plus countries with local currency pricing where supported. Same-day delivery and cash on delivery are India-only. Check the availability map for your country."}
 ];
 
 const CAT_COLORS = {Account:'#7C6EF7',Payments:'#22C55E',Orders:'#F59E0B',Returns:'#EF4444',Subscription:'#A855F7',Privacy:'#0EA5E9',Support:'#EC4899'};
 const CATS = [...new Set(FAQS.map(f => f.cat))];
 
-// ── STATE ──
+// ══════════════════════════════════
+// KEYWORD PRE-FILTER
+// Maps intent keywords → FAQ index
+// Longer keywords = more specific = higher priority
+// ══════════════════════════════════
+const KEYWORD_MAP = [
+  {idx:0,  keys:['forgot password','reset password','forgot my password','cant log in','cant login','locked out','lost my password','reset my password']},
+  {idx:1,  keys:['change email','update email','new email','edit email']},
+  {idx:2,  keys:['delete account','remove account','close account','deactivate account','delete my account']},
+  {idx:3,  keys:['two factor','2fa','two-factor','authenticator','otp','verification code','enable 2fa']},
+  {idx:4,  keys:['payment method','how to pay','accepted payment','pay with','upi','net banking','pay using']},
+  {idx:5,  keys:['payment failed','payment fail','payment declined','payment not working','payment issue','charge failed']},
+  {idx:6,  keys:['invoice','receipt','gst','tax invoice','download bill','billing receipt']},
+  {idx:7,  keys:['how long shipping','when will it arrive','delivery time','shipping time','how long delivery','when does it arrive','how long does it take']},
+  {idx:8,  keys:['track order','track my order','track package','where is my order','where is my package','package status','order status','shipment status','package late','late delivery','package not arrived','my package is late','parcel late']},
+  {idx:9,  keys:['cancel order','cancel my order','stop order','order cancellation']},
+  {idx:10, keys:['return product','return item','how to return','want to return','send it back','return my order','return policy']},
+  {idx:11, keys:['refund time','how long refund','when will i get refund','refund take','when refund','refund status']},
+  {idx:12, keys:['want my money back','get a refund','claim refund','need refund','money back','refund me','give me refund','i want refund']},
+  {idx:13, keys:['cancel subscription','stop subscription','stop charging me','stop being charged','unsubscribe','cancel my subscription','stop my subscription','stop charges','stop billing','charging me']},
+  {idx:14, keys:['free trial','try for free','trial period','no charge trial','trial before paying']},
+  {idx:15, keys:['upgrade plan','upgrade subscription','higher plan','premium plan','pro plan','upgrade my plan']},
+  {idx:16, keys:['is my data safe','data privacy','personal data','data security','is it secure','privacy policy','sell my data','data protection']},
+  {idx:17, keys:['contact support','talk to agent','human agent','call support','email support','customer service','help me','reach support','speak to someone']},
+  {idx:18, keys:['mobile app','download app','android app','ios app','iphone app','get the app']},
+  {idx:19, keys:['outside india','international','other countries','use abroad','work in my country','available in my country']}
+];
+
+function keywordMatch(query) {
+  const q = query.toLowerCase().trim();
+  let bestIdx = -1, bestLen = 0;
+  KEYWORD_MAP.forEach(({idx, keys}) => {
+    keys.forEach(k => {
+      if (q.includes(k) && k.length > bestLen) {
+        bestLen = k.length;
+        bestIdx = idx;
+      }
+    });
+  });
+  return bestIdx;
+}
+
+// ══════════════════════════════════
+// USE EMBEDDINGS
+// ══════════════════════════════════
 let useModel = null;
 let faqEmbeddings = null;
-let asked = 0, totalSim = 0;
-let activeCat = null;
 
-// Conversation memory: last N exchanges, used to contextualize follow-ups
-const MEMORY_TURNS = 3;
-let conversationHistory = []; // [{role:'user'|'bot', text:'...'}]
-
-function buildContextualQuery(rawQuery) {
-  if (!conversationHistory.length) return rawQuery;
-  // Take last MEMORY_TURNS exchanges, weight recent context lightly
-  const recent = conversationHistory.slice(-MEMORY_TURNS * 2);
-  const contextText = recent.map(t => t.text).join('. ');
-  // Prepend lightweight context — the new query still dominates since it's repeated
-  return contextText + '. ' + rawQuery + '. ' + rawQuery;
-}
-
-// ── PROGRESS HELPERS ──
 function setProgress(pct, step) {
-  document.getElementById('load-prog').style.width = pct + '%';
-  document.getElementById('load-step').textContent = step;
+  document.getElementById('lbar').style.width = pct + '%';
+  document.getElementById('lstep').textContent = step;
 }
 
-// ── LOAD MODEL ──
 async function loadModel() {
   try {
     document.getElementById('load-bar-wrap').style.display = 'block';
     setProgress(10, 'Initialising TensorFlow.js runtime…');
-
-    setProgress(25, 'Downloading Universal Sentence Encoder…');
-    document.getElementById('load-sub').textContent = 'Downloading model (~25MB, cached after first load)';
+    document.getElementById('lsub').textContent = 'Downloading Universal Sentence Encoder (~25MB)…';
+    setProgress(25, 'Downloading model…');
 
     useModel = await use.load();
-    setProgress(65, 'Computing FAQ embeddings…');
-    document.getElementById('load-sub').textContent = 'Encoding 20 FAQs into 512-dimensional vectors…';
+    setProgress(65, 'Encoding FAQ questions into embeddings…');
+    document.getElementById('lsub').textContent = 'Encoding 20 FAQ questions into 512-dim vectors…';
 
+    // Embed questions only (not answers) — cleaner semantic separation
     const sentences = FAQS.map(f => f.q);
-    faqEmbeddings = await useModel.embed(sentences);
+    const raw = await useModel.embed(sentences);
 
-    setProgress(90, 'Normalising embedding matrix…');
-    // L2-normalise for fast dot-product similarity
+    setProgress(88, 'Normalising vectors…');
     faqEmbeddings = tf.tidy(() => {
-      const norms = tf.norm(faqEmbeddings, 2, 1, true);
-      return tf.div(faqEmbeddings, norms);
+      const norms = tf.norm(raw, 2, 1, true);
+      return tf.div(raw, norms);
     });
+    raw.dispose();
 
     setProgress(100, 'Ready!');
     setTimeout(() => {
-      document.getElementById('loading-screen').classList.add('hide');
+      document.getElementById('loading').classList.add('hide');
       onReady();
     }, 400);
-
   } catch(e) {
-    document.getElementById('load-sub').textContent = 'Failed to load model. Check your internet connection.';
-    document.getElementById('load-step').textContent = e.message;
+    document.getElementById('lsub').textContent = 'Failed to load. Check internet connection.';
+    document.getElementById('lstep').textContent = e.message;
     document.getElementById('sdot').classList.add('error');
     document.getElementById('slabel').textContent = 'Load failed';
   }
 }
 
-function onReady() {
-  document.getElementById('sdot').classList.add('ready');
-  document.getElementById('slabel').textContent = 'Model ready';
-  document.getElementById('hdrsub').textContent = '● Online · Semantic matching active';
-  document.getElementById('hdrsub').classList.remove('loading');
-  document.getElementById('txt').disabled = false;
-  document.getElementById('txt').placeholder = 'Ask me anything…';
-  document.getElementById('send').disabled = false;
-
-  const badge = document.getElementById('groq-badge-text');
-  if (WORKER_URL.includes("YOUR-SUBDOMAIN")) {
-    badge.textContent = 'Groq fallback: Worker not configured';
-  } else {
-    badge.textContent = `Groq fallback: ready (${GROQ_FALLBACK_LIMIT} calls/session)`;
-  }
-
-  buildSidebar();
-  showWelcome();
-  showChips(defaultChips);
-}
-
-// ── SEMANTIC SEARCH ──
-async function findBest(query) {
-  if (!useModel || !faqEmbeddings) return null;
-  return tf.tidy(() => {
-    // This runs synchronously after async embed
-    return null; // placeholder, real logic below
-  });
-}
-
 async function semanticSearch(query) {
   const qEmbed = await useModel.embed([query]);
-  const qNorm = tf.tidy(() => {
-    const n = tf.norm(qEmbed, 2, 1, true);
-    return tf.div(qEmbed, n);
-  });
-  // dot product = cosine similarity (both L2-normalised)
+  const qNorm = tf.tidy(() => tf.div(qEmbed, tf.norm(qEmbed, 2, 1, true)));
   const sims = tf.tidy(() => tf.squeeze(tf.matMul(qNorm, faqEmbeddings, false, true)));
-  const simsArr = await sims.array();
+  const arr = await sims.array();
   qEmbed.dispose(); qNorm.dispose(); sims.dispose();
-
-  const scored = FAQS.map((f, i) => ({ faq: f, sim: simsArr[i], idx: i }))
-    .sort((a, b) => b.sim - a.sim);
-  return scored;
+  return FAQS.map((f, i) => ({faq:f, sim:arr[i], idx:i})).sort((a,b) => b.sim - a.sim);
 }
 
-// ── GROQ FALLBACK (via Cloudflare Worker proxy — no key in this file) ──
+// ══════════════════════════════════
+// GROQ FALLBACK
+// ══════════════════════════════════
 async function groqFallback(query) {
-  if (WORKER_URL.includes("YOUR-SUBDOMAIN")) {
-    return { ok: false, reason: 'no-worker' };
-  }
-  if (groqCallsUsed >= GROQ_FALLBACK_LIMIT) {
-    return { ok: false, reason: 'limit' };
-  }
+  if (WORKER_URL.includes('YOUR-SUBDOMAIN')) return {ok:false, reason:'no-worker'};
+  if (groqCallsUsed >= GROQ_FALLBACK_LIMIT) return {ok:false, reason:'limit'};
   groqCallsUsed++;
 
   const faqContext = FAQS.map(f => `Q: ${f.q}\nA: ${f.a}`).join('\n\n');
@@ -495,29 +423,72 @@ async function groqFallback(query) {
 
   try {
     const res = await fetch(WORKER_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, faqContext, recentHistory })
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({query, faqContext, recentHistory})
     });
-
-    if (res.status === 429) return { ok: false, reason: 'limit' };
-    if (!res.ok) return { ok: false, reason: 'http-' + res.status };
-
+    if (res.status === 429) return {ok:false, reason:'limit'};
+    if (!res.ok) return {ok:false, reason:'http-'+res.status};
     const data = await res.json();
-    if (!data.text) return { ok: false, reason: 'empty' };
-    return { ok: true, text: data.text };
-  } catch (e) {
-    return { ok: false, reason: 'network' };
+    if (!data.text) return {ok:false, reason:'empty'};
+    return {ok:true, text:data.text};
+  } catch(e) {
+    return {ok:false, reason:'network'};
   }
 }
 
-// ── SIDEBAR ──
+// ══════════════════════════════════
+// CONTEXT MEMORY
+// ══════════════════════════════════
+function buildContextQuery(raw) {
+  if (!conversationHistory.length) return raw;
+  const ctx = conversationHistory.slice(-MEMORY_TURNS * 2).map(t => t.text).join('. ');
+  return ctx + '. ' + raw + '. ' + raw;
+}
+
+// ══════════════════════════════════
+// STATE
+// ══════════════════════════════════
+let asked = 0, totalSim = 0, activeCat = null;
+
+function updateStats(sim) {
+  asked++; totalSim += sim;
+  document.getElementById('s-asked').textContent = asked;
+  document.getElementById('s-conf').textContent = Math.round((totalSim/asked)*100) + '%';
+  const memTurns = Math.min(MEMORY_TURNS, Math.floor(conversationHistory.length/2));
+  document.getElementById('s-mem').textContent = memTurns + '/' + MEMORY_TURNS;
+}
+
+// ══════════════════════════════════
+// ON READY
+// ══════════════════════════════════
+function onReady() {
+  document.getElementById('sdot').classList.add('ready');
+  document.getElementById('slabel').textContent = 'Model ready';
+  document.getElementById('hdrsub').textContent = '● Online · Hybrid NLP active';
+  document.getElementById('hdrsub').classList.remove('loading');
+  document.getElementById('txt').disabled = false;
+  document.getElementById('txt').placeholder = 'Ask me anything…';
+  document.getElementById('send').disabled = false;
+
+  const pill = document.getElementById('groq-pill');
+  pill.textContent = WORKER_URL.includes('YOUR-SUBDOMAIN')
+    ? 'Groq fallback: not configured'
+    : `Groq fallback: ready (${GROQ_FALLBACK_LIMIT} calls/session)`;
+
+  buildSidebar();
+  showWelcome();
+  showChips(defaultChips);
+}
+
+// ══════════════════════════════════
+// SIDEBAR
+// ══════════════════════════════════
 function buildSidebar() {
   const list = document.getElementById('cat-list');
   CATS.forEach(c => {
     const btn = document.createElement('button');
-    btn.className = 'cat-btn';
-    btn.dataset.cat = c;
+    btn.className = 'cat-btn'; btn.dataset.cat = c;
     btn.innerHTML = `<div class="cat-pip" style="background:${CAT_COLORS[c]||'#555'}"></div><span class="cat-name">${c}</span><span class="cat-n">${FAQS.filter(f=>f.cat===c).length}</span>`;
     btn.onclick = () => filterCat(c, btn);
     list.appendChild(btn);
@@ -533,94 +504,93 @@ function filterCat(cat, el) {
     activeCat = cat;
     document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
     el.classList.add('active');
-    const qs = FAQS.filter(f => f.cat === cat).slice(0,4).map(f => f.q);
-    showChips(qs);
-    addBotMsg(`Here are questions in <strong style="color:${CAT_COLORS[cat]}">${cat}</strong>. Pick one or type your own.`, 0, true);
+    showChips(FAQS.filter(f => f.cat === cat).slice(0,4).map(f => f.q));
+    addBotMsg(`Showing <strong style="color:${CAT_COLORS[cat]}">${cat}</strong> questions. Pick one or type your own.`, 0, true, null);
   }
 }
 
-// ── CHIPS ──
-const defaultChips = ["I forgot my login","Package hasn't arrived","Want to cancel subscription","Is my data private?","How to get a refund?"];
+// ══════════════════════════════════
+// CHIPS
+// ══════════════════════════════════
+const defaultChips = ['I forgot my login', 'Where is my package?', 'I want my money back', 'Stop charging me', 'Do you have a free trial?'];
+
 function showChips(list) {
   const area = document.getElementById('chips');
   area.innerHTML = '';
   list.forEach(c => {
     const ch = document.createElement('div');
-    ch.className = 'chip';
-    ch.textContent = c;
+    ch.className = 'chip'; ch.textContent = c;
     ch.onclick = () => { document.getElementById('txt').value = c; send(); };
     area.appendChild(ch);
   });
 }
 
-// ── MESSAGES ──
+// ══════════════════════════════════
+// MESSAGES
+// ══════════════════════════════════
 const msgsEl = document.getElementById('msgs');
+const botAv = () => `<div class="av"><svg viewBox="0 0 22 22" fill="none"><circle cx="11" cy="8" r="3.5" fill="white" opacity=".9"/><path d="M4 19c0-3.866 3.134-7 7-7h2c3.866 0 7 3.134 7 7" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity=".9"/></svg></div>`;
 
 function addUserMsg(text) {
   const row = document.createElement('div');
   row.className = 'row user';
-  const t = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-  row.innerHTML = `<div class="user-av">U</div><div class="msg-wrap"><div class="bubble">${esc(text)}</div><div class="msg-time">${t}</div></div>`;
-  msgsEl.appendChild(row);
-  scroll();
+  const t = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  row.innerHTML = `<div class="uav">U</div><div class="mwrap"><div class="bubble">${esc(text)}</div><div class="mtime">${t}</div></div>`;
+  msgsEl.appendChild(row); scroll();
 }
 
-function addBotMsg(html, sim, isRaw, source) {
+function addBotMsg(content, sim, isHTML, source) {
   const row = document.createElement('div');
   row.className = 'row bot';
-  const simPct = Math.round(sim * 100);
-  const conf = sim >= 0.75 ? 'high' : sim >= 0.6 ? 'mid' : 'low';
-  const confLabel = sim >= 0.75 ? 'High similarity' : sim >= 0.6 ? 'Partial match' : sim > 0 ? 'Low match' : '';
-  const barW = Math.round(sim * 100);
-  const barColor = sim >= 0.6 ? '#22C55E' : sim >= 0.4 ? '#F59E0B' : '#EF4444';
 
   let meta = '';
-  if (sim > 0) {
-    meta = `<div class="sem-bar-wrap">
-      <div class="sem-bar-bg"><div class="sem-bar-fill" style="width:${barW}%;background:${barColor}"></div></div>
-      <span class="sem-label ${conf}">${confLabel} · ${simPct}%</span>
+  if (source === 'keyword') {
+    meta = `<div class="score-row"><span class="sbadge kw">Keyword match</span></div>
+            <div class="tech-row"><span class="tech">Keyword</span><span class="tech">Pre-filter</span><span class="tech">Exact intent</span></div>`;
+  } else if (sim > 0) {
+    const pct = Math.round(sim * 100);
+    const cls = sim >= 0.7 ? 'high' : sim >= 0.5 ? 'mid' : 'low';
+    const lbl = sim >= 0.7 ? 'High similarity' : sim >= 0.5 ? 'Partial match' : 'Low match';
+    const col = sim >= 0.7 ? '#22C55E' : sim >= 0.5 ? '#F59E0B' : '#EF4444';
+    meta = `<div class="score-row">
+      <div class="sbar-bg"><div class="sbar-fill" style="width:${pct}%;background:${col}"></div></div>
+      <span class="sbadge ${cls}">${lbl} · ${pct}%</span>
     </div>
-    <div class="tech-tags"><span class="tech-tag">USE</span><span class="tech-tag">512-dim</span><span class="tech-tag">dot·product</span><span class="tech-tag">L2-norm</span></div>`;
+    <div class="tech-row"><span class="tech">USE</span><span class="tech">512-dim</span><span class="tech">dot·product</span><span class="tech">L2-norm</span></div>`;
   } else if (source === 'groq') {
-    meta = `<div class="tech-tags"><span class="tech-tag" style="color:#A99BFF;border-color:rgba(124,110,247,.35)">Llama 3.1 8B</span><span class="tech-tag">Groq fallback</span><span class="tech-tag">${GROQ_FALLBACK_LIMIT - groqCallsUsed} left</span></div>`;
+    const left = GROQ_FALLBACK_LIMIT - groqCallsUsed;
+    meta = `<div class="tech-row"><span class="tech" style="color:var(--accent2);border-color:rgba(124,110,247,.3)">Llama 3.1 8B</span><span class="tech">Groq fallback</span><span class="tech">${left} left</span></div>`;
   }
 
-  row.innerHTML = `<div class="av-sm"><svg viewBox="0 0 22 22" fill="none"><circle cx="11" cy="8" r="3.5" fill="white" opacity=".9"/><path d="M4 19c0-3.866 3.134-7 7-7h2c3.866 0 7 3.134 7 7" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity=".9"/></svg></div><div class="msg-wrap"><div class="bubble">${isRaw ? html : esc(html)}</div>${meta}</div>`;
-  msgsEl.appendChild(row);
-  scroll();
+  row.innerHTML = `${botAv()}<div class="mwrap"><div class="bubble">${isHTML ? content : esc(content)}</div>${meta}</div>`;
+  msgsEl.appendChild(row); scroll();
 }
 
 function addRelated(results) {
-  if (!results || results.length < 2) return;
-  const secondaries = results.slice(1).filter(r => r.sim > 0.48);
-  if (!secondaries.length) return;
-
+  const sec = results.slice(1).filter(r => r.sim > 0.55).slice(0,2);
+  if (!sec.length) return;
   const row = document.createElement('div');
-  row.className = 'row bot';
-  row.style.animationDelay = '.12s';
-  let cards = secondaries.slice(0,2).map(r =>
+  row.className = 'row bot'; row.style.animationDelay = '.1s';
+  let cards = sec.map(r =>
     `<button class="rel-card" onclick="document.getElementById('txt').value='${r.faq.q.replace(/'/g,"\\'")}';send()">
       <div class="rel-q">${esc(r.faq.q)}</div>
-      <div class="rel-a">${esc(r.faq.a.slice(0,75))}…</div>
-    </button>`
-  ).join('');
-
-  row.innerHTML = `<div class="av-sm" style="opacity:0;pointer-events:none"></div><div class="msg-wrap" style="max-width:75%"><div class="related-head">Related questions</div>${cards}</div>`;
-  msgsEl.appendChild(row);
-  scroll();
+      <div class="rel-a">${esc(r.faq.a.slice(0,72))}…</div>
+    </button>`).join('');
+  row.innerHTML = `${botAv().replace('class="av"','class="av" style="opacity:0;pointer-events:none"')}<div class="mwrap" style="max-width:75%"><div class="rel-head">Related questions</div>${cards}</div>`;
+  msgsEl.appendChild(row); scroll();
 }
 
-function addTypingIndicator() {
+function addTyping() {
   const row = document.createElement('div');
-  row.className = 'row bot typing-row';
-  row.id = 'typing';
-  row.innerHTML = `<div class="av-sm"><svg viewBox="0 0 22 22" fill="none"><circle cx="11" cy="8" r="3.5" fill="white" opacity=".9"/><path d="M4 19c0-3.866 3.134-7 7-7h2c3.866 0 7 3.134 7 7" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity=".9"/></svg></div><div class="msg-wrap"><div class="bubble"><div class="dots"><span></span><span></span><span></span></div></div></div>`;
-  msgsEl.appendChild(row);
-  scroll();
+  row.className = 'row bot'; row.id = 'typing';
+  row.innerHTML = `${botAv()}<div class="mwrap"><div class="bubble"><div class="dots"><span></span><span></span><span></span></div></div></div>`;
+  msgsEl.appendChild(row); scroll();
   return row;
 }
 
-// ── SEND ──
+// ══════════════════════════════════
+// SEND
+// ══════════════════════════════════
 async function send() {
   const inp = document.getElementById('txt');
   const q = inp.value.trim();
@@ -628,80 +598,110 @@ async function send() {
   inp.value = '';
   document.getElementById('chips').innerHTML = '';
   addUserMsg(q);
-  conversationHistory.push({ role: 'user', text: q });
+  conversationHistory.push({role:'user', text:q});
 
-  document.getElementById('thinking-wave').classList.add('show');
-  document.getElementById('hdrsub').textContent = '● Computing embeddings…';
+  document.getElementById('wave').classList.add('show');
+  document.getElementById('hdrsub').textContent = '● Processing…';
   document.getElementById('send').disabled = true;
-  const typRow = addTypingIndicator();
+  const typRow = addTyping();
 
+  // ── STEP 1: Keyword pre-filter (instant, no model needed) ──
+  const kwIdx = keywordMatch(q);
+  if (kwIdx !== -1) {
+    await new Promise(r => setTimeout(r, 300)); // natural feel
+    typRow.remove();
+    document.getElementById('wave').classList.remove('show');
+    document.getElementById('hdrsub').textContent = '● Online · Hybrid NLP active';
+    document.getElementById('send').disabled = false;
+
+    const matched = FAQS[kwIdx];
+    addBotMsg(matched.a, 0, false, 'keyword');
+    conversationHistory.push({role:'bot', text:matched.a});
+    updateStats(0.95);
+
+    const catChips = FAQS.filter(f => f.cat === matched.cat && f.q !== matched.q).slice(0,3).map(f=>f.q);
+    showChips(catChips.length ? catChips : defaultChips);
+    return;
+  }
+
+  // ── STEP 2: USE semantic search ──
+  document.getElementById('hdrsub').textContent = '● Computing embeddings…';
   try {
-    // Use conversation context for follow-up queries (e.g. "what about express?")
-    const contextualQuery = buildContextualQuery(q);
-    const results = await semanticSearch(contextualQuery);
+    const ctx = buildContextQuery(q);
+    const results = await semanticSearch(ctx);
     const best = results[0];
 
-    if (best.sim < 0.45) {
-      // Low confidence — try Groq generative fallback
-      document.getElementById('hdrsub').textContent = '● Consulting Llama 3.1 (fallback)…';
-      const fallback = await groqFallback(q);
-
+    if (best.sim >= 0.55) {
       typRow.remove();
-      document.getElementById('thinking-wave').classList.remove('show');
-      document.getElementById('hdrsub').textContent = '● Online · Semantic matching active';
+      document.getElementById('wave').classList.remove('show');
+      document.getElementById('hdrsub').textContent = '● Online · Hybrid NLP active';
       document.getElementById('send').disabled = false;
 
-      if (fallback.ok) {
-        addBotMsg(fallback.text, 0, false, 'groq');
-        conversationHistory.push({ role: 'bot', text: fallback.text });
-      } else {
-        let msg = "I couldn't find a confident match for that.";
-        if (fallback.reason === 'no-worker') msg += " (Generative fallback is disabled — Worker URL not configured.)";
-        else if (fallback.reason === 'limit') msg += " (Fallback limit reached — try again later.)";
-        msg += " Try rephrasing, or pick a category from the sidebar.";
-        addBotMsg(msg, 0, false);
-        conversationHistory.push({ role: 'bot', text: msg });
-      }
-      showChips(defaultChips);
+      addBotMsg(best.faq.a, best.sim, false, 'use');
+      conversationHistory.push({role:'bot', text:best.faq.a});
+      addRelated(results);
       updateStats(best.sim);
+      const catChips = FAQS.filter(f => f.cat === best.faq.cat && f.q !== best.faq.q).slice(0,3).map(f=>f.q);
+      showChips(catChips.length ? catChips : defaultChips);
       return;
     }
 
+    // ── STEP 3: Groq generative fallback ──
+    document.getElementById('hdrsub').textContent = '● Consulting Llama 3.1…';
+    const fallback = await groqFallback(q);
+
     typRow.remove();
-    document.getElementById('thinking-wave').classList.remove('show');
-    document.getElementById('hdrsub').textContent = '● Online · Semantic matching active';
+    document.getElementById('wave').classList.remove('show');
+    document.getElementById('hdrsub').textContent = '● Online · Hybrid NLP active';
     document.getElementById('send').disabled = false;
 
-    addBotMsg(best.faq.a, best.sim, false);
-    conversationHistory.push({ role: 'bot', text: best.faq.a });
-    addRelated(results);
+    if (fallback.ok) {
+      addBotMsg(fallback.text, 0, false, 'groq');
+      conversationHistory.push({role:'bot', text:fallback.text});
+    } else {
+      let msg = "I couldn't find a confident answer for that.";
+      if (fallback.reason === 'no-worker') msg += ' (Groq fallback not configured.)';
+      else if (fallback.reason === 'limit') msg += ' (Fallback limit reached for this session.)';
+      else msg += ' Try rephrasing, or pick a category from the sidebar.';
+      addBotMsg(msg, 0, false, null);
+      conversationHistory.push({role:'bot', text:msg});
+    }
     updateStats(best.sim);
-
-    // show related category chips
-    const catChips = FAQS.filter(f => f.cat === best.faq.cat && f.q !== best.faq.q).slice(0,3).map(f=>f.q);
-    showChips(catChips.length ? catChips : defaultChips);
+    showChips(defaultChips);
 
   } catch(e) {
     typRow.remove();
-    document.getElementById('thinking-wave').classList.remove('show');
+    document.getElementById('wave').classList.remove('show');
     document.getElementById('send').disabled = false;
-    addBotMsg('Something went wrong with the embedding model. Please refresh and try again.', 0, false);
+    addBotMsg('Something went wrong. Please refresh and try again.', 0, false, null);
   }
 }
 
-function updateStats(sim) {
-  asked++;
-  totalSim += sim;
-  document.getElementById('s-asked').textContent = asked;
-  document.getElementById('s-conf').textContent = Math.round((totalSim / asked) * 100) + '%';
-  const memTurns = Math.min(MEMORY_TURNS, Math.floor(conversationHistory.length / 2));
-  document.getElementById('s-mem').textContent = memTurns + '/' + MEMORY_TURNS;
+// ══════════════════════════════════
+// WELCOME
+// ══════════════════════════════════
+function showWelcome() {
+  const row = document.createElement('div');
+  row.className = 'row bot';
+  row.innerHTML = `${botAv()}<div class="mwrap" style="max-width:84%"><div class="bubble">
+    <div style="font-size:15px;font-weight:600;margin-bottom:6px;font-family:'DM Sans',sans-serif">Hi! I'm NexBot.</div>
+    <div style="font-size:13px;line-height:1.65;color:var(--text2)">I use a <strong style="color:var(--accent2)">hybrid NLP system</strong> — keyword intent matching for precise queries, USE transformer embeddings for semantic paraphrases, and a Llama 3.1 fallback for anything outside the FAQ set.</div>
+    <div class="wgrid">
+      <div class="wcard" onclick="document.getElementById('txt').value='Where is my package?';send()"><div class="wcard-icon">📦</div><div class="wcard-title">Track order</div><div class="wcard-desc">Shipping & delivery</div></div>
+      <div class="wcard" onclick="document.getElementById('txt').value='I want my money back';send()"><div class="wcard-icon">↩️</div><div class="wcard-title">Get a refund</div><div class="wcard-desc">Returns & refunds</div></div>
+      <div class="wcard" onclick="document.getElementById('txt').value='I cannot log into my account';send()"><div class="wcard-icon">🔐</div><div class="wcard-title">Account access</div><div class="wcard-desc">Login & security</div></div>
+      <div class="wcard" onclick="document.getElementById('txt').value='Stop charging me';send()"><div class="wcard-icon">💳</div><div class="wcard-title">Billing</div><div class="wcard-desc">Payments & plans</div></div>
+    </div>
+  </div></div>`;
+  msgsEl.appendChild(row); scroll();
 }
 
+// ══════════════════════════════════
+// CLEAR
+// ══════════════════════════════════
 function clearChat() {
   msgsEl.innerHTML = '';
-  asked = 0; totalSim = 0;
-  conversationHistory = [];
+  asked = 0; totalSim = 0; conversationHistory = [];
   document.getElementById('s-asked').textContent = '0';
   document.getElementById('s-conf').textContent = '—';
   document.getElementById('s-mem').textContent = '0/' + MEMORY_TURNS;
@@ -711,34 +711,15 @@ function clearChat() {
   showChips(defaultChips);
 }
 
-function showWelcome() {
-  const row = document.createElement('div');
-  row.className = 'row bot';
-  row.innerHTML = `<div class="av-sm"><svg viewBox="0 0 22 22" fill="none"><circle cx="11" cy="8" r="3.5" fill="white" opacity=".9"/><path d="M4 19c0-3.866 3.134-7 7-7h2c3.866 0 7 3.134 7 7" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity=".9"/></svg></div>
-  <div class="msg-wrap" style="max-width:82%">
-    <div class="bubble">
-      <div class="welcome-msg">
-        Hi! I'm <strong>NexBot</strong> — a semantic FAQ chatbot powered by <strong>word embeddings</strong>.<br><br>
-        I understand the <em>meaning</em> of your question, not just keywords. Try saying <strong>"I forgot my login"</strong> or <strong>"package is late"</strong> — I'll match them correctly even with no shared words.
-      </div>
-      <div class="quick-grid">
-        <div class="qcard" onclick="document.getElementById('txt').value='my package is late';send()"><div class="qcard-icon">📦</div><div class="qcard-title">Track order</div><div class="qcard-desc">Shipping & delivery</div></div>
-        <div class="qcard" onclick="document.getElementById('txt').value='I want my money back';send()"><div class="qcard-icon">↩️</div><div class="qcard-title">Refunds</div><div class="qcard-desc">Returns & policies</div></div>
-        <div class="qcard" onclick="document.getElementById('txt').value='I cannot log into my account';send()"><div class="qcard-icon">🔐</div><div class="qcard-title">Account access</div><div class="qcard-desc">Login & security</div></div>
-        <div class="qcard" onclick="document.getElementById('txt').value='stop charging me';send()"><div class="qcard-icon">💳</div><div class="qcard-title">Billing</div><div class="qcard-desc">Payments & plans</div></div>
-      </div>
-    </div>
-  </div>`;
-  msgsEl.appendChild(row);
-  scroll();
-}
-
+// ══════════════════════════════════
+// UTILS
+// ══════════════════════════════════
 function scroll() { msgsEl.scrollTop = msgsEl.scrollHeight; }
 function esc(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-document.getElementById('txt').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+document.getElementById('txt').addEventListener('keydown', e => { if(e.key==='Enter') send(); });
+document.getElementById('s-faqs').textContent = FAQS.length;
 
-// Boot
 loadModel();
 </script>
 </body>
